@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { calculate, puRate, singleCycleDistribution, expectedPulls } = require('./calculate.js');
+const { calculateComparison } = require('./compare.js');
+const { calculate, puRate, singleCycleDistribution, expectedPulls, renderFaq } = require('./calculate.js');
 
 test('チャージ境界ごとのPU率', () => {
   assert.equal(puRate(0), 0.007);
@@ -28,4 +29,18 @@ test('全状態DPと独立した畳み込み検算が一致する', () => {
 
 test('累積確率から期待募集回数を求める', () => {
   assert.equal(expectedPulls([0, 0.5, 1], 2), 1.5);
+});
+
+test('英語版Q&Aとページ対応の日英切替を生成する', () => {
+  const result = calculate();
+  const comparison = calculateComparison();
+  const japanese = renderFaq(result, comparison);
+  const english = renderFaq(result, comparison, 'en');
+  assert.match(japanese, /href="en\/faq\.html" lang="en" hreflang="en">EN/);
+  assert.match(english, /<html lang="en">/);
+  assert.match(english, /href="\.\.\/faq\.html" lang="ja" hreflang="ja">JP/);
+  assert.match(english, /rel="alternate" hreflang="x-default"/);
+  assert.match(english, /How many pulls should I expect to need per banner\?/);
+  assert.match(english, /Pyroxene/);
+  assert.doesNotMatch(english, /[ぁ-んァ-ヶ一-龠]/);
 });

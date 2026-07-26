@@ -56,12 +56,35 @@ test('1〜10PUタブと2PU初期表示を生成する', () => {
   assert.doesNotMatch(html, /75% SAFE|安全圏|1\.0周年|5\.5周年/);
 });
 
+test('英語版の確率表と日英切替を生成する', () => {
+  const result = calculateComparison();
+  const japanese = renderHtml(result);
+  const english = renderHtml(result, 'en');
+  assert.match(japanese, /href="en\/" lang="en" hreflang="en">EN/);
+  assert.match(japanese, /2PUが揃う確率（1〜400連）/);
+  assert.match(japanese, /1PUを獲得できる確率（1〜200連）/);
+  assert.match(english, /<html lang="en">/);
+  assert.match(english, /href="\.\.\/" lang="ja" hreflang="ja">JP/);
+  assert.match(english, /rel="alternate" hreflang="x-default"/);
+  assert.match(english, /languageLink\.hash=location\.hash/);
+  assert.match(english, /Blue Archive Recruitment Probability Chart/);
+  assert.match(english, /Recruitment Charge \(solid\)/);
+  assert.match(english, /Recruitment Points \(dashed\)/);
+  assert.match(english, /Probability of obtaining 2 PUs \(1–400 pulls\)/);
+  assert.match(english, /function chartTitle\(target\)/);
+  assert.match(english, /target===1\?' PU':' PUs'/);
+  assert.match(english, /current\+' pulls\\nRecruitment Charge/);
+  assert.doesNotMatch(english, /[ぁ-んァ-ヶ一-龠]/);
+});
+
 test('1〜4PU向けの独立SVGを生成できる', () => {
   const result = calculateComparison();
   for (let target = 1; target <= 4; target += 1) {
     const svg = standaloneSvg(result, target);
     assert.match(svg, /^<svg /);
     assert.match(svg, new RegExp(`${target}PUのガチャ確率`));
+    assert.match(svg, /class="y-label"/);
+    assert.match(svg, /\.grid \.y-label\{text-anchor:end\}/);
     assert.equal((svg.match(/class="curve /g) ?? []).length, 2);
   }
 });
