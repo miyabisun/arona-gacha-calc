@@ -1,10 +1,10 @@
 # arona-gacha-calc
 
-ブルーアーカイブの1.0周年・5.5周年募集について、PUを揃えられる1連ごとの厳密な累積確率を計算・可視化する静的サイトです。
+ブルーアーカイブの呼出ポイント・呼出チャージについて、PUを揃えられる1連ごとの厳密な累積確率を計算・可視化する静的サイトです。
 
 ## 公開ページ
 
-- [1.0周年・5.5周年の1〜4人比較グラフ](https://miyabisun.github.io/arona-gacha-calc/)
+- [呼出ポイント・呼出チャージの1〜10PU比較グラフ](https://miyabisun.github.io/arona-gacha-calc/)
 - [計算の前提とQ&A](https://miyabisun.github.io/arona-gacha-calc/faq.html)
 
 GitHub Pagesを有効化して最初のデプロイが完了するまでは404になります。
@@ -13,7 +13,7 @@ GitHub Pagesを有効化して最初のデプロイが完了するまでは404�
 
 ```text
 .
-├── docs/       # GitHub Pagesでそのまま公開するHTML・計算結果JSON
+├── docs/       # GitHub Pagesで公開するHTML・計算結果JSON・1〜4PUのSVG
 ├── scripts/    # 計算、HTML生成、自動検算に使うNode.jsスクリプト
 ├── package.json
 └── README.md
@@ -30,7 +30,7 @@ npm run build
 npm test
 ```
 
-- `npm run build:comparison`: 厳密DPで `docs/index.html` と `docs/comparison-results.json` を生成
+- `npm run build:comparison`: 厳密DPで比較ページ、JSON、`docs/img/1pu.svg`〜`4pu.svg`を生成
 - `npm run build:faq`: Q&Aと詳細な2人募集の検算JSONを生成
 
 ## GitHub Pagesで公開する
