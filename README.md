@@ -1,11 +1,12 @@
 # arona-gacha-calc
 
-ブルーアーカイブの新旧募集仕様について、PUを揃えられる累積確率を計算・可視化する静的サイトです。
+ブルーアーカイブの1.0周年・5.5周年募集について、PUを揃えられる累積確率を計算・可視化する静的サイトです。
 
 ## 公開ページ
 
-- [新仕様・2人募集の厳密計算](https://miyabisun.github.io/arona-gacha-calc/)
-- [新旧比較・2〜4人のモンテカルロ結果](https://miyabisun.github.io/arona-gacha-calc/simulation.html)
+- [5.5周年・2人募集の厳密計算](https://miyabisun.github.io/arona-gacha-calc/)
+- [1.0周年・5.5周年の1〜4人比較グラフ](https://miyabisun.github.io/arona-gacha-calc/simulation.html)
+- [計算の前提とQ&A](https://miyabisun.github.io/arona-gacha-calc/faq.html)
 
 GitHub Pagesを有効化して最初のデプロイが完了するまでは404になります。
 
@@ -30,8 +31,8 @@ npm run build
 npm test
 ```
 
-- `npm run build:exact`: 厳密DPで `docs/index.html` と `docs/results.json` を生成
-- `npm run build:simulation`: 100万回のモンテカルロ法で比較ページとJSONを生成
+- `npm run build:exact`: 厳密DPで `docs/index.html`、`docs/faq.html`、`docs/results.json` を生成
+- `npm run build:simulation`: 100万回のモンテカルロ法で1人200連〜4人800連の比較ページとJSONを生成
 - `SIM_TRIALS=10000 npm run build:simulation`: 任意の試行回数で生成
 
 ## GitHub Pagesで公開する

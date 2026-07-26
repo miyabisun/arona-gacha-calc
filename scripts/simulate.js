@@ -4,10 +4,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const NORMAL_RATE = 0.007;
-const MAX_PULLS = 400;
+const MAX_PULLS = 800;
 const DEFAULT_TRIALS = 1_000_000;
 const SEED = [0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344];
-const TARGETS = [2, 3, 4];
+const TARGETS = [1, 2, 3, 4];
 const OUTPUT_DIR = path.join(__dirname, '..', 'docs');
 
 function rotateLeft(value, shift) {
@@ -57,7 +57,7 @@ function simulateNew(trials, random) {
 function oldCompletionPull(naturalPulls, target) {
   let earliest = Infinity;
   // j回交換する候補。j=0も「すべて自引き」の候補として扱う。
-  for (let exchanges = 0; exchanges <= 2; exchanges += 1) {
+  for (let exchanges = 0; exchanges <= MAX_PULLS / 200; exchanges += 1) {
     const naturalNeeded = target - exchanges;
     if (naturalNeeded < 0) continue;
     const naturalReady = naturalNeeded === 0 ? 0 : naturalPulls[naturalNeeded - 1];
@@ -183,8 +183,8 @@ function runSimulation(trials = DEFAULT_TRIALS) {
       ],
     },
     assumptions: {
-      newRule: '対象PUを順に狙う。通常0.7%、チャージ99で50%、199で100%。獲得時チャージ0。',
-      oldRule: '対象PUを順に通常0.7%で狙い、各制限回数の終了後にfloor(募集回数/200)人まで未所持PUを交換。',
+      fivePointFiveAnniversary: '対象PUを順に狙う。通常0.7%、チャージ99で50%、199で100%。獲得時チャージ0。',
+      onePointZeroAnniversary: '対象PUを順に通常0.7%で狙い、各制限回数の終了後にfloor(募集回数/200)人まで未所持PUを交換。',
       nonTargetPuSpooksCounted: false,
     },
     monteCarlo: { new: newEstimated, old: oldEstimated },
@@ -215,42 +215,34 @@ function graphSvg(result, target, maxPulls, id) {
   const plotWidth = width - left - right; const plotHeight = height - top - bottom;
   const yLines = [0, .25, .5, .75, 1].map((value) => {
     const y = top + (1 - value) * plotHeight;
-    return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"/><text x="${left - 10}" y="${y + 4}">${value * 100}%</text>`;
+    const className = value === .75 ? 'safe' : 'horizontal';
+    const label = value === .75 ? '75% SAFE' : `${value * 100}%`;
+    return `<line class="${className}" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"/><text class="${className}" x="${left - 10}" y="${y + 4}">${label}</text>`;
   }).join('');
-  const xLines = Array.from({ length: Math.floor(maxPulls / 50) + 1 }, (_, index) => index * 50).map((pull) => {
+  const xLines = Array.from({ length: Math.floor(maxPulls / 10) + 1 }, (_, index) => index * 10).map((pull) => {
     const x = left + (pull / maxPulls) * plotWidth;
-    return `<line x1="${x}" y1="${top}" x2="${x}" y2="${height - bottom}"/><text x="${x}" y="${height - 14}">${pull}</text>`;
+    const major = pull % 100 === 0;
+    return `<line class="${major ? 'major' : 'minor'}" x1="${x}" y1="${top}" x2="${x}" y2="${height - bottom}"/>${major ? `<text x="${x}" y="${height - 14}">${pull}</text>` : ''}`;
   }).join('');
-  return `<div class="chart-shell" data-chart="${id}" data-max="${maxPulls}"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${target}人を揃える累積確率の新旧比較"><g class="grid">${yLines}${xLines}</g><path class="curve old" d="${chartPath(result.monteCarlo.old[target], maxPulls)}"/><path class="curve fresh" d="${chartPath(result.monteCarlo.new[target], maxPulls)}"/><line class="cursor" x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}"/><rect class="hit" x="${left}" y="${top}" width="${plotWidth}" height="${plotHeight}"/></svg><output class="chart-tip"></output></div>`;
-}
-
-function tableRows(result, target, pulls) {
-  return pulls.map((pull) => {
-    const fresh = result.monteCarlo.new[target][pull];
-    const old = result.monteCarlo.old[target][pull];
-    return `<tr><th>${pull}連</th><td>${pct(fresh)}</td><td>${pct(old)}</td><td class="${fresh >= old ? 'plus' : 'minus'}">${fresh >= old ? '+' : ''}${pct(fresh - old)}</td></tr>`;
-  }).join('');
+  return `<div class="chart-shell" data-chart="${id}" data-max="${maxPulls}"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${target}人を揃える累積確率の1.0周年と5.5周年比較"><g class="grid">${yLines}${xLines}</g><path class="curve one" d="${chartPath(result.monteCarlo.old[target], maxPulls)}"/><path class="curve five" d="${chartPath(result.monteCarlo.new[target], maxPulls)}"/><rect class="hit" x="${left}" y="${top}" width="${plotWidth}" height="${plotHeight}"/><circle class="hover-dot one" r="5"/><circle class="hover-dot five" r="5"/></svg><output class="chart-tip"></output></div>`;
 }
 
 function renderHtml(result) {
   const chartData = JSON.stringify({
-    two: { new: result.monteCarlo.new[2].slice(0, 301), old: result.monteCarlo.old[2].slice(0, 301) },
-    three: { new: result.monteCarlo.new[3], old: result.monteCarlo.old[3] },
-    four: { new: result.monteCarlo.new[4], old: result.monteCarlo.old[4] },
+    one: { five: result.monteCarlo.new[1].slice(0, 201), one: result.monteCarlo.old[1].slice(0, 201) },
+    two: { five: result.monteCarlo.new[2].slice(0, 401), one: result.monteCarlo.old[2].slice(0, 401) },
+    three: { five: result.monteCarlo.new[3].slice(0, 601), one: result.monteCarlo.old[3].slice(0, 601) },
+    four: { five: result.monteCarlo.new[4], one: result.monteCarlo.old[4] },
   }).replaceAll('<', '\\u003c');
   const bound = points(result.metadata.dkwUniformErrorBound, 3);
-  const oneWithin100 = 1 - (0.993 ** 99) * 0.5;
-  const eitherWithin100 = 1 - ((1 - oneWithin100) ** 2);
-  const remainingRoutes = result.exactAudit.new[2][300] - eitherWithin100;
   const trialMultiplier = result.metadata.trials / 10_000;
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PU募集 新旧仕様シミュレーション</title><style>
-:root{--night:#07111f;--panel:#0d1d2d;--line:#25445b;--text:#e9f5ff;--muted:#8eabc0;--new:#49d5ff;--old:#ffcc67;--good:#62e3a4;--bad:#ff7d8f}*{box-sizing:border-box}body{margin:0;background:var(--night);color:var(--text);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.7;background-image:radial-gradient(circle at 80% 5%,#174b6655,transparent 33%),linear-gradient(#17314822 1px,transparent 1px),linear-gradient(90deg,#17314822 1px,transparent 1px);background-size:auto,24px 24px,24px 24px}main{width:min(1180px,calc(100% - 30px));margin:44px auto 70px}.eyebrow{font:700 .75rem ui-monospace,monospace;color:var(--new);letter-spacing:.17em;text-transform:uppercase}h1{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(2rem,6vw,4.6rem);line-height:1.04;letter-spacing:.02em;margin:.15em 0}.lede{color:var(--muted);max-width:62rem;font-size:1.04rem}.hero{padding:38px 0 30px}.verdict{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-top:30px}.metric{background:#091827;padding:20px}.metric small{display:block;color:var(--muted)}.metric strong{display:block;font:700 clamp(1.55rem,4vw,2.6rem) ui-monospace,monospace;letter-spacing:-.05em}.panel{background:#0b1927ed;border:1px solid var(--line);padding:26px;margin:22px 0;box-shadow:10px 10px 0 #020b13}.panel h2{font:700 clamp(1.25rem,3vw,1.8rem) "Yu Mincho",serif;margin:0 0 6px}.panel-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:18px}.legend{display:flex;gap:16px;color:var(--muted);font-size:.85rem}.legend i{display:inline-block;width:22px;height:3px;margin-right:7px;vertical-align:middle}.legend .n{background:var(--new)}.legend .o{background:var(--old)}.chart-shell{position:relative}.chart-shell svg{display:block;width:100%;height:auto}.grid line{stroke:#244258;stroke-width:1}.grid text{fill:var(--muted);font:12px ui-monospace,monospace;text-anchor:middle}.grid text:first-of-type{text-anchor:end}.curve{fill:none;stroke-width:4;stroke-linejoin:round;stroke-linecap:round}.curve.fresh{stroke:var(--new)}.curve.old{stroke:var(--old)}.cursor{stroke:#fff;stroke-width:1;stroke-dasharray:4 5;opacity:0;pointer-events:none}.hit{fill:transparent;cursor:crosshair}.chart-tip{position:absolute;display:none;pointer-events:none;background:#020a12ee;border:1px solid #5f8299;padding:8px 11px;font:12px/1.5 ui-monospace,monospace;white-space:nowrap}.tables{display:grid;grid-template-columns:1fr 1fr;gap:20px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font:14px ui-monospace,"Yu Gothic",monospace;font-variant-numeric:tabular-nums}th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child{text-align:left}thead th{color:var(--muted);font-size:.78rem}.plus{color:var(--good)}.minus{color:var(--bad)}.small{font-size:.82rem;color:var(--muted)}.term{all:unset;border-bottom:1px dotted var(--new);cursor:help;position:relative}.term:after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);width:min(320px,80vw);padding:10px;background:#020a12;border:1px solid #5f8299;color:var(--text);font:12px/1.55 sans-serif;opacity:0;visibility:hidden;z-index:5}.term:hover:after,.term:focus:after{opacity:1;visibility:visible}.sources a{color:var(--new)}footer{color:var(--muted);font:12px ui-monospace,monospace;text-align:center;margin-top:34px}@media(max-width:760px){.verdict,.tables{grid-template-columns:1fr}.panel{padding:18px}.panel-head{display:block}.legend{margin-top:8px}.curve{stroke-width:6}.hero{padding-top:15px}}@media(prefers-reduced-motion:no-preference){.hero,.panel{animation:up .5s both}.panel:nth-of-type(2){animation-delay:.08s}.panel:nth-of-type(3){animation-delay:.14s}@keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}}
-</style></head><body><main><header class="hero"><div class="eyebrow"><a href="./" style="color:inherit">← Exact report</a> / Recruitment probability / simulation report</div><h1>余った1連が、<br>確率を押し上げる。</h1><p class="lede">PUを早く引いたぶん、次のPUへ残り回数をすべて渡す。固定された「100連を人数分」では見えなかった経路を、1連刻みで新旧比較しました。</p><div class="verdict"><div class="metric"><small>2人・新仕様 300連</small><strong>${pct(result.monteCarlo.new[2][300])}</strong></div><div class="metric"><small>2人・旧仕様 300連</small><strong>${pct(result.monteCarlo.old[2][300])}</strong></div><div class="metric"><small>新仕様の差</small><strong class="plus">+${pct(result.monteCarlo.new[2][300]-result.monteCarlo.old[2][300])}</strong></div></div></header>
-<section class="panel"><div class="eyebrow">Why nearly 95%</div><h2>300連で高確率になる理由</h2><p>1人あたり最大200連なので、片方を100連以内に獲得できれば、もう片方には200連以上が残り確定します。「2回のうち少なくとも一方が100連以内」の経路だけで <strong class="plus">${pct(eitherWithin100)}</strong>。さらに、両方100連超でも合計300連以内となる経路が <strong class="plus">${pct(remainingRoutes)}</strong> あり、合計が約94.75%になります。</p></section>
-<section class="panel"><div class="panel-head"><div><div class="eyebrow">Two targets / 1–300 pulls</div><h2>2人を揃える累積確率</h2></div><div class="legend"><span><i class="n"></i>新仕様</span><span><i class="o"></i>旧仕様＋交換</span></div></div>${graphSvg(result,2,300,'two')}<div class="table-wrap"><table><thead><tr><th>制限</th><th>新仕様</th><th>旧仕様</th><th>新−旧</th></tr></thead><tbody>${tableRows(result,2,[50,100,150,199,200,250,299,300])}</tbody></table></div></section>
-<div class="tables"><section class="panel"><div class="panel-head"><div><div class="eyebrow">Anniversary / three targets</div><h2>3人を400連で狙う</h2></div><div class="legend"><span><i class="n"></i>新</span><span><i class="o"></i>旧</span></div></div>${graphSvg(result,3,400,'three')}<div class="table-wrap"><table><thead><tr><th>制限</th><th>新仕様</th><th>旧仕様</th><th>新−旧</th></tr></thead><tbody>${tableRows(result,3,[100,200,300,400])}</tbody></table></div></section><section class="panel"><div class="panel-head"><div><div class="eyebrow">Anniversary / four targets</div><h2>4人を400連で狙う</h2></div><div class="legend"><span><i class="n"></i>新</span><span><i class="o"></i>旧</span></div></div>${graphSvg(result,4,400,'four')}<div class="table-wrap"><table><thead><tr><th>制限</th><th>新仕様</th><th>旧仕様</th><th>新−旧</th></tr></thead><tbody>${tableRows(result,4,[100,200,300,400])}</tbody></table></div></section></div>
-<section class="panel small sources"><p><button class="term" data-tip="各試行で募集を1回ずつ進め、成功した試行の割合を累積確率として推定します。固定シードなので再実行しても同じ結果です。">モンテカルロ法</button>を使用（${result.metadata.trials.toLocaleString('ja-JP')}試行）。各曲線の1〜400連全体に対する95%一様誤差幅は <strong>±${bound}</strong>。1万試行なら±${points(result.metadata.tenThousandTrialDkwBound,3)}となるため、今回は${trialMultiplier.toLocaleString('ja-JP')}倍にしました。厳密DPとの実測最大差は、新仕様 ${points(result.exactAudit.newMaxAbsoluteDifference,3)}／旧仕様 ${points(result.exactAudit.oldMaxAbsoluteDifference,3)}です。</p><p>前提：未所持PUを順に狙い、対象外PUのすり抜けは数えません。旧仕様は各時点で募集を終了した後、200ptごとに未所持1人を交換します。<button class="term" data-tip="経験分布関数と真の累積分布関数の最大差を、全ての募集回数について同時に抑える不等式です。">誤差幅の根拠</button>：<a href="https://doi.org/10.1214/aop/1176990746">Massart (1990)</a>、割合推定の参考：<a href="https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/propconf.htm">NIST</a>。</p></section><footer>Generated by simulate.js / seed ${result.metadata.seed.join(' · ')}</footer></main>
-<script>const DATA=${chartData};document.querySelectorAll('[data-chart]').forEach(shell=>{const svg=shell.querySelector('svg'),hit=shell.querySelector('.hit'),cursor=shell.querySelector('.cursor'),tip=shell.querySelector('.chart-tip'),series=DATA[shell.dataset.chart],max=Number(shell.dataset.max);const move=e=>{const r=svg.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),pull=Math.round(ratio*max),x=58+(pull/max)*(920-58-18);cursor.setAttribute('x1',x);cursor.setAttribute('x2',x);cursor.style.opacity=1;tip.style.display='block';tip.style.left=Math.min(r.width-150,Math.max(0,(x/920)*r.width+8))+'px';tip.style.top=Math.max(0,(e.clientY-r.top)-48)+'px';tip.textContent=pull+'連  新 '+(series.new[pull]*100).toFixed(3)+'% / 旧 '+(series.old[pull]*100).toFixed(3)+'%'};hit.addEventListener('pointermove',move);hit.addEventListener('pointerleave',()=>{cursor.style.opacity=0;tip.style.display='none'})});</script></body></html>`;
+  const graph = (target, maxPulls, id) => `<section class="panel"><div class="panel-head"><div><div class="eyebrow">${target} target${target > 1 ? 's' : ''} / ${maxPulls} pulls</div><h2>${target}人を${maxPulls}連で揃える</h2></div><div class="legend"><span><i class="five"></i>5.5周年</span><span><i class="one"></i>1.0周年</span><span class="safe-key">— 75% 安全圏</span></div></div>${graphSvg(result,target,maxPulls,id)}</section>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PU募集 1.0周年・5.5周年比較</title><style>
+:root{--night:#07111f;--panel:#0d1d2d;--line:#25445b;--text:#e9f5ff;--muted:#8eabc0;--five:#49d5ff;--one:#ffcc67;--safe:#ff6078}*{box-sizing:border-box}body{margin:0;background:var(--night);color:var(--text);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.7;background-image:radial-gradient(circle at 80% 5%,#174b6655,transparent 33%),linear-gradient(#17314822 1px,transparent 1px),linear-gradient(90deg,#17314822 1px,transparent 1px);background-size:auto,24px 24px,24px 24px}main{width:min(1180px,calc(100% - 30px));margin:44px auto 70px}.eyebrow{font:700 .75rem ui-monospace,monospace;color:var(--five);letter-spacing:.17em;text-transform:uppercase}.nav{display:flex;gap:18px;margin-bottom:18px}.nav a{color:var(--muted);font-size:.86rem}.nav a[aria-current]{color:var(--five)}h1{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(2rem,6vw,4.5rem);line-height:1.06;letter-spacing:.02em;margin:.15em 0}.lede{color:var(--muted);max-width:62rem;font-size:1.04rem}.hero{padding:20px 0 30px}.panel{background:#0b1927ed;border:1px solid var(--line);padding:26px;margin:22px 0;box-shadow:10px 10px 0 #020b13}.panel h2{font:700 clamp(1.25rem,3vw,1.8rem) "Yu Mincho",serif;margin:0}.panel-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:12px}.legend{display:flex;flex-wrap:wrap;gap:16px;color:var(--muted);font-size:.83rem}.legend i{display:inline-block;width:22px;height:3px;margin-right:7px;vertical-align:middle}.legend .five{background:var(--five)}.legend .one{background:var(--one)}.safe-key{color:#ff9aa9}.chart-shell{position:relative}.chart-shell svg{display:block;width:100%;height:auto}.grid line.horizontal{stroke:#244258;stroke-width:1}.grid line.minor{stroke:#2a465a;stroke-width:.6;opacity:.42}.grid line.major{stroke:#6a8496;stroke-width:1;opacity:.58}.grid line.safe{stroke:var(--safe);stroke-width:2;opacity:.58}.grid text{fill:var(--muted);font:12px ui-monospace,monospace;text-anchor:middle}.grid text.safe{fill:#ff91a2;font-weight:700;text-anchor:end}.curve{fill:none;stroke-width:4;stroke-linejoin:round;stroke-linecap:round;pointer-events:none}.curve.five{stroke:var(--five)}.curve.one{stroke:var(--one)}.hit{fill:transparent;cursor:crosshair}.hover-dot{display:none;pointer-events:none;stroke:#07111f;stroke-width:2}.hover-dot.five{fill:var(--five)}.hover-dot.one{fill:var(--one)}.chart-tip{position:absolute;display:none;pointer-events:none;background:#020a12f2;border:1px solid #5f8299;padding:8px 11px;font:12px/1.55 ui-monospace,monospace;white-space:nowrap;z-index:3}.small{font-size:.82rem;color:var(--muted)}.term{all:unset;border-bottom:1px dotted var(--five);cursor:help;position:relative}.term:after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);width:min(320px,80vw);padding:10px;background:#020a12;border:1px solid #5f8299;color:var(--text);font:12px/1.55 sans-serif;opacity:0;visibility:hidden;z-index:5}.term:hover:after,.term:focus:after{opacity:1;visibility:visible}.sources a,footer a{color:var(--five)}footer{color:var(--muted);font:12px ui-monospace,monospace;text-align:center;margin-top:34px}@media(max-width:760px){.panel{padding:15px 10px}.panel-head{display:block;padding:0 8px}.legend{margin-top:8px}.curve{stroke-width:6}.hero{padding-top:10px}.chart-tip{font-size:10px}}@media(prefers-reduced-motion:no-preference){.hero,.panel{animation:up .45s both}@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}}
+</style></head><body><main><nav class="nav"><a href="./">厳密計算</a><a href="simulation.html" aria-current="page">周年比較</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="eyebrow">1.0 anniversary / 5.5 anniversary</div><h1>お迎え率が100%へ<br>届くまで。</h1><p class="lede">1.0周年の呼び出しポイント方式と、5.5周年の呼び出しチャージ方式を、1連ごとの累積お迎え率で比較します。赤線は75%の安全圏です。</p></header>
+${graph(1,200,'one')}${graph(2,400,'two')}${graph(3,600,'three')}${graph(4,800,'four')}
+<section class="panel small sources"><p><button class="term" data-tip="各試行で募集を1回ずつ進め、成功した試行の割合を累積確率として推定します。固定シードなので再実行しても同じ結果です。">モンテカルロ法</button>を使用（${result.metadata.trials.toLocaleString('ja-JP')}試行）。各曲線の1〜800連全体に対する95%一様誤差幅は <strong>±${bound}</strong>。1万試行の${trialMultiplier.toLocaleString('ja-JP')}倍です。厳密DPとの実測最大差は、5.5周年 ${points(result.exactAudit.newMaxAbsoluteDifference,3)}／1.0周年 ${points(result.exactAudit.oldMaxAbsoluteDifference,3)}。</p><p>前提：未所持PUを順に狙い、対象外PUのすり抜けは数えません。1.0周年は各時点で募集を終了した後、200ptごとに未所持1人を交換します。<a href="faq.html">計算の考え方とQ&amp;A</a></p></section><footer>Generated by scripts/simulate.js / seed ${result.metadata.seed.join(' · ')}</footer></main>
+<script>const DATA=${chartData};document.querySelectorAll('[data-chart]').forEach(shell=>{const svg=shell.querySelector('svg'),hit=shell.querySelector('.hit'),tip=shell.querySelector('.chart-tip'),fiveDot=shell.querySelector('.hover-dot.five'),oneDot=shell.querySelector('.hover-dot.one'),series=DATA[shell.dataset.chart],max=Number(shell.dataset.max),left=58,right=18,top=18,bottom=42,width=920,height=430,plotWidth=width-left-right,plotHeight=height-top-bottom;const move=e=>{const r=svg.getBoundingClientRect(),svgX=(e.clientX-r.left)/r.width*width,ratio=Math.max(0,Math.min(1,(svgX-left)/plotWidth)),pull=Math.round(ratio*max),x=left+(pull/max)*plotWidth,fiveY=top+(1-series.five[pull])*plotHeight,oneY=top+(1-series.one[pull])*plotHeight;for(const [dot,y] of [[fiveDot,fiveY],[oneDot,oneY]]){dot.setAttribute('cx',x);dot.setAttribute('cy',y);dot.style.display='block'}tip.style.display='block';tip.style.left=Math.min(r.width-190,Math.max(0,(x/width)*r.width+8))+'px';tip.style.top=Math.max(0,(e.clientY-r.top)-50)+'px';tip.textContent=pull+'連  5.5周年 '+(series.five[pull]*100).toFixed(3)+'% / 1.0周年 '+(series.one[pull]*100).toFixed(3)+'%'};hit.addEventListener('pointermove',move);hit.addEventListener('pointerleave',()=>{tip.style.display='none';fiveDot.style.display='none';oneDot.style.display='none'})});</script></body></html>`;
 }
 
 function main() {
@@ -262,9 +254,12 @@ function main() {
   fs.writeFileSync(path.join(OUTPUT_DIR, 'simulation-results.json'), `${JSON.stringify(result, null, 2)}\n`);
   fs.writeFileSync(path.join(OUTPUT_DIR, 'simulation.html'), renderHtml(result));
   console.log(`試行回数: ${trials.toLocaleString('ja-JP')} (${((Date.now()-started)/1000).toFixed(2)}秒)`);
-  for (const target of TARGETS) console.log(`${target}人/400連 新=${pct(result.monteCarlo.new[target][400])} 旧=${pct(result.monteCarlo.old[target][400])}`);
+  for (const target of TARGETS) {
+    const limit = target * 200;
+    console.log(`${target}人/${limit}連 5.5周年=${pct(result.monteCarlo.new[target][limit])} 1.0周年=${pct(result.monteCarlo.old[target][limit])}`);
+  }
   console.log(`DKW 95%一様誤差上限: ±${pct(result.metadata.dkwUniformErrorBound)}`);
-  console.log(`厳密値との最大差: 新=${pct(result.exactAudit.newMaxAbsoluteDifference)} 旧=${pct(result.exactAudit.oldMaxAbsoluteDifference)}`);
+  console.log(`厳密値との最大差: 5.5周年=${pct(result.exactAudit.newMaxAbsoluteDifference)} 1.0周年=${pct(result.exactAudit.oldMaxAbsoluteDifference)}`);
 }
 
 if (require.main === module) main();

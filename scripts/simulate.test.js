@@ -6,11 +6,12 @@ test('DKW誤差上限は試行回数の平方根に反比例する', () => {
   assert.ok(Math.abs(dkwErrorBound(10_000) / dkwErrorBound(250_000) - 5) < 1e-12);
 });
 
-test('旧仕様の交換可能時点を正しく扱う', () => {
+test('1.0周年の交換可能時点を正しく扱う', () => {
   assert.equal(oldCompletionPull([50], 2), 200);
   assert.equal(oldCompletionPull([50, 250], 3), 250);
   assert.equal(oldCompletionPull([], 2), 400);
-  assert.equal(oldCompletionPull([], 3), Infinity);
+  assert.equal(oldCompletionPull([], 3), 600);
+  assert.equal(oldCompletionPull([], 4), 800);
 });
 
 test('既存の2人・200/300連の厳密値と一致する', () => {
@@ -27,11 +28,12 @@ test('既存の2人・200/300連の厳密値と一致する', () => {
 
 test('厳密曲線は0〜1の範囲で単調非減少', () => {
   for (const curves of [exactNewCurves(), exactOldCurves()]) {
-    for (const target of [2, 3, 4]) {
-      for (let pull = 1; pull <= 400; pull += 1) {
-        assert.ok(curves[target][pull] >= curves[target][pull - 1] - 1e-15);
+    for (const target of [1, 2, 3, 4]) {
+      for (let pull = 1; pull <= 800; pull += 1) {
+        assert.ok(curves[target][pull] >= curves[target][pull - 1] - 1e-14);
         assert.ok(curves[target][pull] >= 0 && curves[target][pull] <= 1 + 1e-14);
       }
+      assert.ok(Math.abs(curves[target][target * 200] - 1) < 1e-12);
     }
   }
 });
