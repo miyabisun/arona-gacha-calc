@@ -15,6 +15,7 @@ GitHub Pagesを有効化して最初のデプロイが完了するまでは404�
 .
 ├── docs/       # GitHub Pagesで公開するHTML・計算結果JSON・1〜4PUのSVG
 ├── scripts/    # 計算、HTML生成、自動検算に使うNode.jsスクリプト
+├── LICENSE
 ├── package.json
 └── README.md
 ```
@@ -44,3 +45,7 @@ npm test
 以後は `docs/` の変更を `main` へpushすると自動公開されます。公開元を削除するとPagesのビルドが失敗するため、`docs/` は残してください。
 
 詳細は[GitHub公式のPublishing source設定](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)を参照してください。
+
+## ライセンス
+
+[MIT License](LICENSE)
