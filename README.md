@@ -1,11 +1,10 @@
 # arona-gacha-calc
 
-ブルーアーカイブの1.0周年・5.5周年募集について、PUを揃えられる累積確率を計算・可視化する静的サイトです。
+ブルーアーカイブの1.0周年・5.5周年募集について、PUを揃えられる1連ごとの厳密な累積確率を計算・可視化する静的サイトです。
 
 ## 公開ページ
 
-- [5.5周年・2人募集の厳密計算](https://miyabisun.github.io/arona-gacha-calc/)
-- [1.0周年・5.5周年の1〜4人比較グラフ](https://miyabisun.github.io/arona-gacha-calc/simulation.html)
+- [1.0周年・5.5周年の1〜4人比較グラフ](https://miyabisun.github.io/arona-gacha-calc/)
 - [計算の前提とQ&A](https://miyabisun.github.io/arona-gacha-calc/faq.html)
 
 GitHub Pagesを有効化して最初のデプロイが完了するまでは404になります。
@@ -20,7 +19,7 @@ GitHub Pagesを有効化して最初のデプロイが完了するまでは404�
 └── README.md
 ```
 
-`docs/` は生成済み成果物です。`scripts/` が計算の証跡であり、乱数計算には固定シードを使うため再現できます。
+`docs/` は生成済み成果物です。`scripts/` が計算の証跡です。状態DPを独立した畳み込み・二項分布計算と照合しており、乱数は使用しません。
 
 ## 再生成と検証
 
@@ -31,9 +30,8 @@ npm run build
 npm test
 ```
 
-- `npm run build:exact`: 厳密DPで `docs/index.html`、`docs/faq.html`、`docs/results.json` を生成
-- `npm run build:simulation`: 100万回のモンテカルロ法で1人200連〜4人800連の比較ページとJSONを生成
-- `SIM_TRIALS=10000 npm run build:simulation`: 任意の試行回数で生成
+- `npm run build:comparison`: 厳密DPで `docs/index.html` と `docs/comparison-results.json` を生成
+- `npm run build:faq`: Q&Aと詳細な2人募集の検算JSONを生成
 
 ## GitHub Pagesで公開する
 

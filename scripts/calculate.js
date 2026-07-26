@@ -106,51 +106,18 @@ function pct(value, digits = 6) {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
-function bucketBreakdown(entries, limit) {
-  const buckets = [];
-  for (let start = 1; start < limit; start += 25) {
-    const end = Math.min(start + 24, limit - 1);
-    const probability = entries
-      .filter(({ firstPull }) => firstPull >= start && firstPull <= end)
-      .reduce((sum, item) => sum + item.probability, 0);
-    buckets.push({ range: `${start}–${end}`, probability });
-  }
-  return buckets;
-}
-
-function renderHtml(result) {
-  const milestoneRows = result.milestones.map((row) => `
-            <tr><th>${row.pull}</th><td>${pct(row.zero)}</td><td>${pct(row.one)}</td><td class="answer">${pct(row.two)}</td><td>${pct(row.completedExactly)}</td></tr>`).join('');
-  const breakdownTables = [200, 300].map((limit) => {
-    const rows = bucketBreakdown(result.completionByFirstPull[String(limit)], limit)
-      .map((item) => `<tr><th>${item.range}</th><td>${pct(item.probability)}</td></tr>`).join('');
-    return `<section><h3>${limit}連以内に2人獲得：1人目の獲得時点別寄与</h3><table><thead><tr><th>1人目を引いた募集</th><th>最終確率への寄与</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><th>合計</th><td class="answer">${pct(result.summary[String(limit)].newTwoPUs)}</td></tr></tfoot></table></section>`;
-  }).join('');
-
-  return `<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ブルーアーカイブ 5.5周年募集の確率</title>
-<style>
-:root{color-scheme:light;--ink:#172133;--muted:#607089;--line:#cfdeeb;--blue:#087fc4;--cyan:#14bde5;--paper:#fbfdff;--pale:#eaf8ff}*{box-sizing:border-box}body{margin:0;background-color:#edf5fa;background-image:linear-gradient(#8fb5ca1a 1px,transparent 1px),linear-gradient(90deg,#8fb5ca1a 1px,transparent 1px);background-size:28px 28px;color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75}body:before{content:"";position:fixed;inset:0 0 auto;height:5px;background:linear-gradient(90deg,var(--blue),var(--cyan) 65%,#ffd86a);z-index:2}main{width:min(100% - 32px,980px);margin:54px auto}header,section{position:relative;background:#fbfdfff5;border:1px solid var(--line);padding:28px 30px;margin:0 0 22px;box-shadow:10px 10px 0 #8eb8ce1c}header:after,section:after{content:"";position:absolute;width:11px;height:11px;right:12px;top:12px;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan)}h1{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(1.65rem,4vw,2.6rem);letter-spacing:.035em;line-height:1.35;margin:0 0 8px}h2{margin-top:0;font-size:1.28rem;letter-spacing:.04em;border-left:5px solid var(--cyan);padding-left:12px}h3{font-size:1.05rem;margin-top:0}.lead{color:var(--muted);margin:0;max-width:48rem}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:26px}.card{position:relative;background:linear-gradient(135deg,var(--pale),#fff);border:1px solid #cbe8f5;padding:17px;overflow:hidden}.card:after{content:"";position:absolute;width:56px;height:56px;right:-29px;bottom:-29px;border:8px solid #11bce51f;transform:rotate(45deg)}.card strong{display:block;color:var(--blue);font-family:ui-monospace,"SFMono-Regular",Consolas,monospace;font-size:1.85rem;letter-spacing:-.04em;line-height:1.25}.card small{color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-family:ui-monospace,"SFMono-Regular",Consolas,"Yu Gothic",monospace;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}th:first-child{text-align:left}tbody tr:hover{background:#e8f7ff80}thead th{color:var(--muted);font-size:.83rem;letter-spacing:.02em;border-bottom:2px solid #9ecfe5}.answer{font-weight:800;color:var(--blue);background:#e7f8ff80}code{background:#e7f0f6;padding:.15em .38em;border-radius:2px}ul{padding-left:1.4em}.note{color:var(--muted);font-size:.9rem}footer{text-align:center;color:var(--muted);font-family:ui-monospace,monospace;font-size:.8rem;padding:8px;letter-spacing:.04em}@media(prefers-reduced-motion:no-preference){header,.cards,section{animation:reveal .55s both}section:nth-of-type(2){animation-delay:.08s}section:nth-of-type(3){animation-delay:.14s}@keyframes reveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}}@media(max-width:600px){main{margin:24px auto}header,section{padding:20px 18px;box-shadow:5px 5px 0 #8eb8ce1c}th,td{padding:8px}}
-</style></head><body><main>
-<header><h1>5.5周年募集でPU 2人を獲得できる確率</h1><p class="lead">各PUを0.7%の募集で順番に狙い、PU獲得時に呼び出しチャージを0へ戻す前提の厳密計算です。率が提示されていない、現在狙っていない別PUのすり抜け獲得は数えません。</p><div class="cards"><div class="card"><small>5.5周年・200連以内</small><strong>${pct(result.summary['200'].newTwoPUs)}</strong><span>PU 2人を獲得</span></div><div class="card"><small>5.5周年・300連以内</small><strong>${pct(result.summary['300'].newTwoPUs)}</strong><span>PU 2人を獲得</span></div><div class="card"><small>1.0周年・200連</small><strong>${pct(result.oldRule.withExchange)}</strong><span>1人以上自引き＋もう1人交換</span></div></div></header>
-<section><h2>募集回数ごとの全確率</h2><div class="table-wrap"><table><thead><tr><th>募集回数</th><th>0人</th><th>ちょうど1人</th><th>2人獲得済み</th><th>その回で2人目</th></tr></thead><tbody>${milestoneRows}</tbody></table></div><p class="note">各行の「0人＋ちょうど1人＋2人獲得済み」は100%です。表示のみ小数第6位に丸めています。</p></section>
-${breakdownTables}
-<section><h2>網羅性と再現方法</h2><ul><li><code>calculate.js</code> は、各募集前の「獲得済み人数 × チャージ（0〜199）」を状態として、成功・失敗の両方へ確率質量を分配します。</li><li>チャージ99では成功率50%、199では100%、その他では0.7%。成功時は次のPUへ進みチャージ0、失敗時はチャージを1増やします。</li><li>独立に求めた「1人を引くまでの所要回数分布」を2回畳み込む別計算とも照合しています。最大差は ${result.audit.maxCrossCheckDifference.toExponential(3)}、確率質量の最大誤差は ${result.audit.maxMassError.toExponential(3)} でした。</li><li><code>node calculate.js</code> で <code>results.json</code> とこのHTMLを再生成できます。JSONには1〜300連の全行と、1人目を引いた個々の回（1連目、2連目…）ごとの寄与を収録しています。</li></ul></section>
-<footer><a href="simulation.html">1.0周年・5.5周年グラフ</a> · <a href="faq.html">計算Q&amp;A</a><br>Generated by scripts/calculate.js — deterministic dynamic programming</footer></main></body></html>`;
-}
-
 function renderFaq(result) {
   const oneWithin100 = result.simpleComparison.oneWithin100;
   const eitherWithin100 = 1 - ((1 - oneWithin100) ** 2);
   const remainingRoutes = result.summary['300'].newTwoPUs - eitherWithin100;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>募集確率 Q&amp;A</title><style>
-:root{--ink:#172133;--muted:#607089;--line:#cfdeeb;--blue:#087fc4;--cyan:#14bde5;--pale:#eaf8ff}*{box-sizing:border-box}body{margin:0;background-color:#edf5fa;background-image:linear-gradient(#8fb5ca1a 1px,transparent 1px),linear-gradient(90deg,#8fb5ca1a 1px,transparent 1px);background-size:28px 28px;color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75}main{width:min(100% - 32px,900px);margin:48px auto}.nav{display:flex;gap:18px;margin-bottom:20px}.nav a{color:var(--muted)}.nav a[aria-current]{color:var(--blue);font-weight:700}header,.qa{background:#fbfdfff5;border:1px solid var(--line);padding:28px 30px;margin:0 0 20px;box-shadow:8px 8px 0 #8eb8ce1c}h1{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(2rem,5vw,3.4rem);margin:0}.lead{color:var(--muted)}.qa h2{font-size:1.18rem;margin:0 0 12px;border-left:5px solid var(--cyan);padding-left:12px}.answer{color:var(--blue);font-weight:800}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:right}th{text-align:left}code{background:#e7f0f6;padding:.15em .38em}footer{text-align:center;color:var(--muted);font-size:.82rem}@media(max-width:600px){header,.qa{padding:20px 18px}}
-</style></head><body><main><nav class="nav"><a href="./">厳密計算</a><a href="simulation.html">周年比較</a><a href="faq.html" aria-current="page">Q&amp;A</a></nav><header><h1>計算についてのQ&amp;A</h1><p class="lead">結果ページから分離した、前提・単純計算との差・確率が伸びる理由です。</p></header>
+:root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(900px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}header,.qa{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}h1{font-size:17px;font-weight:600;line-height:1.3;margin:0}.lead{color:var(--muted);margin-bottom:0}.qa h2{font-size:17px;line-height:1.3;margin:0 0 12px;padding:4px 0 4px 12px;border-left:4px solid var(--accent)}.answer{color:var(--accent);font-weight:700}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right}th{text-align:left}code{background:var(--accent-subtle);color:var(--on);border-radius:6px;padding:4px}footer{text-align:center;color:var(--muted);font-size:12px;margin-top:24px}@media(max-width:600px){main{width:calc(100% - 16px);margin:16px auto}header,.qa{padding:12px}.qa{overflow-wrap:anywhere}table{display:block;overflow-x:auto}th,td{padding:8px 4px;font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style></head><body><main><nav class="nav"><a href="./">周年比較</a><a href="faq.html" aria-current="page">Q&amp;A</a></nav><header><h1>計算についてのQ&amp;A</h1><p class="lead">前提・単純計算との差・確率が伸びる理由・厳密計算の監査方法です。</p></header>
 <section class="qa"><h2>なぜ「100連を2回」より200連通しの確率が高い？</h2><table><tbody><tr><th>1人を100連以内</th><td>${pct(oneWithin100)}</td></tr><tr><th>100連×2と固定する単純計算</th><td>${pct(result.simpleComparison.twoFixedWindows)}</td></tr><tr><th>余りを次のPUへ渡す5.5周年の厳密計算</th><td class="answer">${pct(result.summary['200'].newTwoPUs)}</td></tr><tr><th>拾い直される確率</th><td class="answer">+${pct(result.simpleComparison.recoveredByFlexibleSplit)}</td></tr></tbody></table><p>1人目を50連以内に獲得して200連以内に2人揃う経路だけでも、全体へ ${pct(result.simpleComparison.firstWithin50ContributionAt200)} 寄与します。</p></section>
 <section class="qa"><h2>なぜ5.5周年は300連で約95%まで上がる？</h2><p>1人あたり最大200連です。2回のうち片方でも100連以内なら、残る片方へ200連以上を渡せるため必ず揃います。この経路だけで <span class="answer">${pct(eitherWithin100)}</span>。両方100連超でも合計300連以内となる経路 ${pct(remainingRoutes)} を加えて、${pct(result.summary['300'].newTwoPUs)} になります。</p></section>
 <section class="qa"><h2>1.0周年と5.5周年は何を指す？</h2><p><strong>1.0周年</strong>は募集1回ごとに呼び出しポイントが貯まり、200ptごとに未所持PUを1人交換する方式です。<strong>5.5周年</strong>はPUが出なければチャージが増え、99→100点の募集で50%、199→200点の募集で100%、PU獲得時に0へ戻る方式として計算しています。</p></section>
-<section class="qa"><h2>どこまでをPU獲得として数える？</h2><p>未所持PUを順番に狙い、現在狙っているPUの率を0.7%とします。提示されていない別PUのすり抜け率は加算していません。1.0周年の2人・200連は、1人以上を自引きする確率 <code>1 − 0.993²⁰⁰</code> と、残る1人のポイント交換を組み合わせます。</p></section><footer>Generated by scripts/calculate.js</footer></main></body></html>`;
+<section class="qa"><h2>どこまでをPU獲得として数える？</h2><p>未所持PUを順番に狙い、現在狙っているPUの率を0.7%とします。提示されていない別PUのすり抜け率は加算していません。1.0周年の2人・200連は、1人以上を自引きする確率 <code>1 − 0.993²⁰⁰</code> と、残る1人のポイント交換を組み合わせます。</p></section>
+<section class="qa"><h2>厳密計算で組み合わせ爆発しない？</h2><p>履歴を列挙せず、同じ「獲得人数 × チャージ」の履歴を一つの状態へ集約します。5.5周年は最大4×200程度の状態を800連進めるだけです。別実装として、1人分の所要回数分布を人数分だけ畳み込んだ結果とも照合します。1.0周年は自引き人数DPと二項分布の閉形式を照合し、さらに確率質量の合計、単調性、人数×200連で100%になることを検査します。</p></section><footer>Generated by scripts/calculate.js</footer></main></body></html>`;
 }
 
 function calculate() {
@@ -203,7 +170,6 @@ function main() {
   const result = calculate();
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.writeFileSync(path.join(OUTPUT_DIR, 'results.json'), `${JSON.stringify(result, null, 2)}\n`);
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'index.html'), renderHtml(result));
   fs.writeFileSync(path.join(OUTPUT_DIR, 'faq.html'), renderFaq(result));
   console.log(`5.5周年 200連以内: ${pct(result.summary['200'].newTwoPUs)}`);
   console.log(`5.5周年 300連以内: ${pct(result.summary['300'].newTwoPUs)}`);
