@@ -46,6 +46,10 @@ test('1〜10PUタブと2PU初期表示を生成する', () => {
   assert.match(html, /data-target="2">2pu<\/button>/);
   assert.match(html, /let selected=2/);
   assert.match(html, /toFixed\(2\)/);
+  assert.match(html, /\.chart-tip\{position:absolute;right:8px;bottom:8px/);
+  assert.match(html, /連\\n呼出チャージ/);
+  assert.match(html, /github\.com\/miyabisun\/arona-gacha-calc/);
+  assert.doesNotMatch(html, /tip\.style\.(left|top)/);
   assert.doesNotMatch(html, /75% SAFE|安全圏|1\.0周年|5\.5周年/);
 });
 
