@@ -1,0 +1,15 @@
+{
+  "name": "arona-gacha-calc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Blue Archive recruitment probability calculator",
+  "scripts": {
+    "build": "npm run build:exact && npm run build:simulation",
+    "build:exact": "node scripts/calculate.js",
+    "build:simulation": "node scripts/simulate.js",
+    "test": "node --test scripts/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
