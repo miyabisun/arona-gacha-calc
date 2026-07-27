@@ -6882,8 +6882,10 @@
     "perBlockNormal": 1000,
     "perBlockFestival": 1600,
     "blockGain": 600,
-    "blockGainLetters": 160,
-    "bankGain": 297
+    "blockGainLetters": 12,
+    "usefulRatio": 0.1,
+    "bankGain": 297,
+    "bankGainLetters": 6
   },
   "banking": {
     "bankPulls": 99,
