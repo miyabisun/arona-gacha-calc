@@ -534,6 +534,11 @@ function calculateFestival() {
   banking.limitedOtherRate = LIMITED_STAR3_RATE - (NORMAL_PU_RATE * 2);
   banking.haulFestival = banking.carryPulls * banking.otherStar3Festival;
   banking.haulLimited = banking.carryPulls * banking.limitedOtherRate;
+  // 捨てた連数の機会費用。PUを狙っていれば重複100＋初回ボーナス100の200文字が目標だった。
+  banking.goalLetters = PU_DUPLICATE_LETTERS + BONUS_LETTERS;
+  banking.forgoneLetters = (banking.carryPulls / banking.expectedPullsPlain) * banking.goalLetters;
+  // 限定で引いても拾えた分を差し引いた、正味の上積み。
+  banking.netStar3 = banking.haulFestival - banking.haulLimited;
 
   // 「本命1名を狙い続ける」意味を、開始時の素体0人/1人の2ケースで測る。
   const focusPlans = [
@@ -668,7 +673,7 @@ function retreatSection(result) {
     const savedPulls = without.expectedPulls - withSpook.expectedPulls;
     const lostLetters = without.letters - withSpook.letters;
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}素体がそろった時点で撤退する前提です。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>すべて指名で引く</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜けを含む実際</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜けで決着した割合</th><td colspan="2" data-label="すり抜けで決着">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。</p><p class="note">相方が素体確保で十分な性能なら、これは早く終わって得をした話です。相方にも固有2が要るなら、撤退せず指名を続けることになります。そのときは先に素体を持っているぶん、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になり、取り逃した100文字はそこで戻ります。</p></div>`;
-  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。限定募集は2名で1セットなので、その2名をそろえるまでで比べます。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>2名そろえるまで</th><th>期待募集回数</th><th>必要な石</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待募集回数">${result.banking.twoSetPlain.toFixed(1)}連</td><td data-label="必要な石">${stone(result.banking.twoSetPlain)}石</td></tr><tr><th>チャージ99から</th><td data-label="期待募集回数" class="best">${result.banking.twoSetBanked.toFixed(1)}連</td><td data-label="必要な石" class="best">${stone(result.banking.twoSetBanked)}石</td></tr><tr><th>差</th><td data-label="期待募集回数">−${result.banking.twoSetSaved.toFixed(1)}連</td><td data-label="必要な石">−${stone(result.banking.twoSetSaved)}石</td></tr></tbody></table><p><b>純粋に${result.banking.twoSetSaved.toFixed(0)}連分、安くなります。</b></p><h3>その代わり99連を先に引く</h3><p>短縮された${result.banking.twoSetSaved.toFixed(0)}連を差し引くと、取り返せない持ち出しは <b>${result.banking.carryPulls.toFixed(0)}連</b>（${stone(result.banking.carryPulls)}石）です。この${result.banking.carryPulls.toFixed(0)}連を溝に捨てる代わりに、<b>星3生徒がランダムで${result.banking.haulFestival.toFixed(2)}名</b>お迎えできます。</p><h3>それは得なのか</h3><p>同じ${result.banking.carryPulls.toFixed(0)}連を次の限定募集で引いても、PU以外の星3は拾えます。どちらが多いかだけで判定できます。</p><p class="formula">${result.banking.carryPulls.toFixed(0)}連 × ${pct(result.banking.otherStar3Festival)}（フェス限） = ${result.banking.haulFestival.toFixed(2)}名 ＞ ${result.banking.carryPulls.toFixed(0)}連 × ${pct(result.banking.limitedOtherRate)}（限定） = ${result.banking.haulLimited.toFixed(2)}名</p><p class="note">差は ${(result.banking.haulFestival - result.banking.haulLimited).toFixed(2)}名 で<b>得</b>。ただし貯めている途中で指名した生徒を引き当てるとチャージは0に戻るため、99連を引ききってもチャージが残るのは <b>${pct(result.banking.survivalToBank)}</b> です。</p></div>`;
+  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。限定募集は2名で1セットなので、その2名をそろえるまでで比べます。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>2名そろえるまで</th><th>期待募集回数</th><th>必要な石</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待募集回数">${result.banking.twoSetPlain.toFixed(1)}連</td><td data-label="必要な石">${stone(result.banking.twoSetPlain)}石</td></tr><tr><th>チャージ99から</th><td data-label="期待募集回数" class="best">${result.banking.twoSetBanked.toFixed(1)}連</td><td data-label="必要な石" class="best">${stone(result.banking.twoSetBanked)}石</td></tr><tr><th>差</th><td data-label="期待募集回数">−${result.banking.twoSetSaved.toFixed(1)}連</td><td data-label="必要な石">−${stone(result.banking.twoSetSaved)}石</td></tr></tbody></table><p><b>純粋に${result.banking.twoSetSaved.toFixed(0)}連分、安くなります。</b></p><h3>その代わり99連を先に引く</h3><p>短縮された${result.banking.twoSetSaved.toFixed(0)}連を差し引くと、取り返せない持ち出しは <b>${result.banking.carryPulls.toFixed(0)}連</b>（${stone(result.banking.carryPulls)}石）です。この${result.banking.carryPulls.toFixed(0)}連を溝に捨てる代わりに、<b>星3生徒がランダムで${result.banking.haulFestival.toFixed(2)}名</b>お迎えできます。</p><h3>それは損か得か</h3><p>捨てた${result.banking.carryPulls.toFixed(0)}連は、PUを狙っていれば<b>${result.banking.goalLetters}文字</b>（重複100＋初回ボーナス100）というゴールへ向かっていた分です。期待${result.banking.expectedPullsPlain.toFixed(0)}連でそこへ届くので、${result.banking.carryPulls.toFixed(0)}連はゴールの半分強にあたります。いっぽう受け取る星3は、同じ${result.banking.carryPulls.toFixed(0)}連を限定募集で引いても拾えた分を差し引いて数えます。</p><p class="formula">捨てる： ${result.banking.carryPulls.toFixed(0)}連 ÷ ${result.banking.expectedPullsPlain.toFixed(1)}連 × ${result.banking.goalLetters}文字 = <b>${result.banking.forgoneLetters.toFixed(0)}文字</b><br>受け取る： ${result.banking.carryPulls.toFixed(0)}連 × （${pct(result.banking.otherStar3Festival)} − ${pct(result.banking.limitedOtherRate)}） = <b>${result.banking.netStar3.toFixed(2)}名</b>の闇鍋</p><p class="note">確実な${result.banking.forgoneLetters.toFixed(0)}文字を手放して、育てるかどうかも分からない星3が${result.banking.netStar3.toFixed(2)}名。<b>明らかに損なので、この仕込みは勧められません。</b>そのうえ貯めている途中で指名した生徒を引き当てればチャージは0に戻り、99連を引ききってもチャージが残るのは <b>${pct(result.banking.survivalToBank)}</b> です。</p></div>`;
   return `<section class="panel"><h2>新仕様は全員そろえるまで降りられない</h2><p>呼出チャージには交換がないので、狙った生徒は順番に指名して引き当てるしかありません。まず素体をそろえるまでの期待値を置き、そこにすり抜けが挟まると何が変わるかを見ます。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
@@ -961,20 +966,24 @@ const ENGLISH_REPLACEMENTS = [
   ['石）です。この', ' Pyroxene). Throw those '],
   ['連を溝に捨てる代わりに、<b>星3生徒がランダムで', ' pulls away and what comes back is <b>'],
   ['名</b>お迎えできます。</p>', ' random 3★ students</b>.</p>'],
-  ['<h3>それは得なのか</h3>', '<h3>Is that a win?</h3>'],
+  ['<h3>それは損か得か</h3>', '<h3>Does it pay off?</h3>'],
   [
-    '<p>同じ46連を次の限定募集で引いても、PU以外の星3は拾えます。どちらが多いかだけで判定できます。</p>',
-    '<p>The same 46 pulls on the next limited banner would also turn up 3★ students outside the pickup. Whichever yields more settles it.</p>',
+    '<p>捨てた46連は、PUを狙っていれば<b>200文字</b>（重複100＋初回ボーナス100）というゴールへ向かっていた分です。期待90連でそこへ届くので、46連はゴールの半分強にあたります。いっぽう受け取る星3は、同じ46連を限定募集で引いても拾えた分を差し引いて数えます。</p>',
+    '<p>Those 46 discarded pulls were otherwise heading toward <b>200 Eleph</b> — 100 for the duplicate plus the 100 first-time bonus. That goal arrives in about 90 pulls, so 46 covers a little over half the distance. The 3★ students received are counted net of what the same 46 pulls would have turned up on a limited banner anyway.</p>',
   ],
-  ['（フェス限） = ', ' (festival) = '],
-  ['名 ＞ ', ' students > '],
-  ['（限定） = ', ' (limited) = '],
-  ['名</p>', ' students</p>'],
-  ['<p class="note">差は ', '<p class="note">A margin of '],
-  ['名 で<b>得</b>。ただし貯めている途中で指名した生徒を引き当てるとチャージは0に戻るため、99連を引ききってもチャージが残るのは <b>',
-   ' students, so it <b>pays off</b>. Pulling the student you selected resets the charge to 0, though, so the chance of still holding it after 99 pulls is <b>'],
+  ['<p class="formula">捨てる： ', '<p class="formula">Given up: '],
+  ['連 ÷ ', ' pulls / '],
+  ['連 × 200文字 = <b>', ' pulls x 200 Eleph = <b>'],
+  ['文字</b><br>受け取る： ', ' Eleph</b><br>Received: '],
+  ['連 × （', ' pulls x ('],
+  [' − ', ' - '],
+  ['） = <b>', ') = <b>'],
+  ['名</b>の闇鍋</p>', ' students</b>, sight unseen</p>'],
+  ['<p class="note">確実な', '<p class="note">Trading a certain '],
+  ['文字を手放して、育てるかどうかも分からない星3が', ' Eleph for 3★ students you may never build, all '],
+  ['名。<b>明らかに損なので、この仕込みは勧められません。</b>そのうえ貯めている途中で指名した生徒を引き当てればチャージは0に戻り、99連を引ききってもチャージが残るのは <b>',
+   ' of them. <b>That is plainly a losing trade, so this plan is not recommended.</b> On top of that, pulling the student you selected resets the charge to 0, and the chance of still holding it after 99 pulls is only <b>'],
   ['</b> です。</p>', '</b>.</p>'],
-  ['連 × ', ' pulls x '],
   ['<h2>実際にはどこで降りるのか</h2>', '<h2>Where the run actually ends</h2>'],
   [
     '<p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p>',

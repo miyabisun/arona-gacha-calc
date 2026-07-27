@@ -6907,7 +6907,10 @@
     "twoSetSaved": 53.026873667112824,
     "limitedOtherRate": 0.016,
     "haulFestival": 2.022817558647036,
-    "haulLimited": 0.735570021326195
+    "haulLimited": 0.735570021326195,
+    "goalLetters": 200,
+    "forgoneLetters": 102.08053342917441,
+    "netStar3": 1.287247537320841
   },
   "audit": {
     "maxMassError": 7.882583474838611e-15
