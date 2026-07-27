@@ -12,7 +12,6 @@ const {
   SPOOK_EACH_RATE,
   MAX_PULLS,
   TARGETS,
-  TABLE_PULLS,
 } = require('./festival.js');
 
 test('確定枠と残り抽選枠の境界', () => {
@@ -146,26 +145,37 @@ test('欠片は安い段から順に文字へ換算する', () => {
 test('生成ページの数値が計算結果と一致する', () => {
   const result = calculateFestival();
   const html = renderFestival(result);
-  const shown = (value) => `${(value * 100).toFixed(2)}%`;
   for (const target of TARGETS) {
-    for (const pull of TABLE_PULLS[target]) {
-      assert.ok(html.includes(shown(result.scenarios.charge[target].allBase[pull])));
-      assert.ok(html.includes(shown(result.scenarios.point[target].allBonus[pull])));
+    // 撤退シナリオ: すり抜けの有無で期待連数と文字が並ぶ。
+    const retreat = result.retreat[target];
+    assert.ok(html.includes(`${retreat.withSpook.expectedPulls.toFixed(1)}連`), `${target}PU すり抜けあり期待連数`);
+    assert.ok(html.includes(`${retreat.withoutSpook.expectedPulls.toFixed(1)}連`), `${target}PU すり抜けなし期待連数`);
+    assert.ok(html.includes(`${Math.round(retreat.withoutSpook.letters)}文字`), `${target}PU 指名だけの文字`);
+    // ブロック運用: 進め方ごとの期待消費と文字。
+    for (const plan of ['focus', 'sequential']) {
+      const row = result.blockRun[target][plan];
+      assert.ok(html.includes(`${Math.round(row.letters)}文字`), `${target}PU ${plan} の文字`);
+      assert.ok(html.includes(`${Math.round(row.pulls * 120).toLocaleString('ja-JP')}石`), `${target}PU ${plan} の石`);
     }
-    assert.ok(html.includes(`${result.scenarios.charge[target].expectedPullsToAllBonus.toFixed(1)}連`));
+  }
+  // 素体をそろえる費用は呼出チャージ・呼出ポイントの両方を出す。
+  for (const target of TARGETS) {
+    assert.ok(html.includes(`${result.scenarios.charge[target].expectedPullsToAllBase.toFixed(1)}連`));
+    assert.ok(html.includes(`${result.scenarios.point[target].expectedPullsToAllBase.toFixed(1)}連`));
   }
 });
 
 test('有利な側にだけ印が付く', () => {
   const result = calculateFestival();
   const html = renderFestival(result);
-  // 3名200連は呼出ポイントが優位、期待回数は呼出チャージが優位。
-  assert.ok(result.scenarios.point[3].allBase[200] > result.scenarios.charge[3].allBase[200]);
-  assert.ok(result.scenarios.charge[3].expectedPullsToAllBonus < result.scenarios.point[3].expectedPullsToAllBonus);
-  assert.match(html, /<b class="best">50\.62%<\/b>/);
-  assert.match(html, /<b class="best">270\.2連<\/b>/);
-  // 100%同士など差がない組は印を付けない。
-  assert.doesNotMatch(html, /<b class="best">100\.00%<\/b>/);
+  // 2名・3名は呼出チャージが安く、4名だけ呼出ポイントが安い。
+  assert.ok(result.scenarios.charge[2].expectedPullsToAllBase < result.scenarios.point[2].expectedPullsToAllBase);
+  assert.ok(result.scenarios.point[4].expectedPullsToAllBase < result.scenarios.charge[4].expectedPullsToAllBase);
+  assert.match(html, /class="best">172\.6連/);
+  assert.match(html, /class="best">317\.1連/);
+  // 交換枠の比較でも、文字が多い側と確保が確実な側に印が付く。
+  assert.match(html, /<td class="best">605文字<\/td>/);
+  assert.ok((html.match(/class="best"/g) ?? []).length >= 6);
 });
 
 test('呼出ポイントは200連ごとに必ず1名分のボーナスを増やす', () => {

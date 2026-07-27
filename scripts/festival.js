@@ -543,7 +543,7 @@ function calculateFestival() {
   ]));
 
   // そろったら止める前提での、呼出ポイント2PUの現実的な進め方。
-  const blockRun = Object.fromEntries([2, 3].map((targets) => [targets, {
+  const blockRun = Object.fromEntries([2, 3, 4].map((targets) => [targets, {
     focus: runBlockRun(targets, { focus: true }),
     sequential: runBlockRun(targets, { focus: false }),
   }]));
@@ -703,69 +703,10 @@ function jointTable(result, limit, planId) {
   return `<table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>お迎え数</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function letterRows(result) {
-  return TARGETS.map((target) => {
-    const charge = result.scenarios.charge[target];
-    const point = result.scenarios.point[target];
-    const rows = TABLE_PULLS[target].map((pull, index) => {
-      const head = index === 0 ? `<th rowspan="${TABLE_PULLS[target].length}">${target}名</th>` : '';
-      const cell = (row, rival) => `<td><b${better(row.letters[pull], rival.letters[pull], true)}>${Math.round(row.letters[pull])}文字</b><small>＋${Math.round(row.shards[pull])}欠片</small></td>`;
-      const gap = point.letters[pull] - charge.letters[pull];
-      return `<tr>${head}<th class="sub">${pull}連</th>${cell(charge, point)}${cell(point, charge)}<td class="${gap >= 0 ? 'plus' : ''}">${gap >= 0 ? '+' : '−'}${Math.abs(Math.round(gap))}文字</td></tr>`;
-    }).join('');
-    return `<tbody>${rows}</tbody>`;
-  });
-}
-
-function milestoneRows(result) {
-  // 3名を狙った場合の文字を、凸の到達段位に突き合わせる。
-  const charge = result.scenarios.charge[3];
-  const point = result.scenarios.point[3];
-  return MILESTONE_LETTERS.map(({ name, cost }) => {
-    // 上限までに届かない段位は言語に依存しない「—」で示す。
-    const reachPull = (row) => row.letters.findIndex((value) => value >= cost);
-    const show = (pull) => (pull < 0 ? '—' : `${pull}連`);
-    const chargePull = reachPull(charge);
-    const pointPull = reachPull(point);
-    // 早く届いたほうに印を付ける。届かない側は比較から外す。
-    const mark = (mine, rival) => (mine >= 0 && (rival < 0 || mine < rival) ? ' class="best"' : '');
-    return `<tr><th>${name}</th><td>${cost}文字</td><td${mark(chargePull, pointPull)}>${show(chargePull)}</td><td${mark(pointPull, chargePull)}>${show(pointPull)}</td></tr>`;
-  });
-}
-
-function riskRows(result) {
-  return TARGETS.map((target) => {
-    const p = result.scenarios.charge[target].pullsAtPercentile;
-    return `<tr><th>${target}名</th><td>${p['0.5']}連</td><td>${p['0.75']}連</td><td>${p['0.9']}連</td><td>${target * 200}連</td></tr>`;
-  });
-}
-
 /** 差がある場合だけ有利な側へ印を付ける。到達率は高い方、期待回数は少ない方が有利。 */
 function better(value, rival, preferHigh) {
   const wins = preferHigh ? value > rival + 1e-9 : value < rival - 1e-9;
   return wins ? ' class="best"' : '';
-}
-
-function reachRows(result) {
-  return TARGETS.map((target) => {
-    const charge = result.scenarios.charge[target];
-    const point = result.scenarios.point[target];
-    const rows = TABLE_PULLS[target].map((pull, index) => {
-      const head = index === 0 ? `<th rowspan="${TABLE_PULLS[target].length}">${target}名</th>` : '';
-      const cell = (row, rival) => `<td><b${better(row.allBase[pull], rival.allBase[pull], true)}>${pct(row.allBase[pull])}</b><small>素体</small><b${better(row.allBonus[pull], rival.allBonus[pull], true)}>${pct(row.allBonus[pull])}</b><small>ボーナス</small></td>`;
-      return `<tr>${head}<th class="sub">${pull}連</th>${cell(charge, point)}${cell(point, charge)}</tr>`;
-    }).join('');
-    return `<tbody>${rows}</tbody>`;
-  });
-}
-
-function expectationRows(result) {
-  return TARGETS.map((target) => {
-    const charge = result.scenarios.charge[target];
-    const point = result.scenarios.point[target];
-    const cell = (row, rival) => `<td><b${better(row.expectedPullsToAllBase, rival.expectedPullsToAllBase, false)}>${row.expectedPullsToAllBase.toFixed(1)}連</b><small>素体</small><b${better(row.expectedPullsToAllBonus, rival.expectedPullsToAllBonus, false)}>${row.expectedPullsToAllBonus.toFixed(1)}連</b><small>ボーナス</small></td>`;
-    return `<tr><th>${target}名</th>${cell(charge, point)}${cell(point, charge)}</tr>`;
-  });
 }
 
 const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:600;margin:0 0 8px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}details summary{cursor:pointer;font-weight:600;font-size:15px;padding:2px 0;color:var(--muted)}details[open] summary{margin-bottom:8px;color:var(--on)}summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.tabs{display:flex;gap:4px;margin:0 0 12px}.tabs button{flex:1 1 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--raised);color:var(--muted);font:500 15px/1.2 system-ui,sans-serif;cursor:pointer}.tabs button[aria-selected="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--on)}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}';
@@ -783,13 +724,7 @@ ${FESTIVAL_CSS}
 ${retreatSection(result)}
 <section class="panel"><h2>新仕様の言い分：石が安く済む</h2><p>ここまでは同じ連数を積んだ場合の話でした。新仕様の主張は<b>そもそも積む石が少なくて済む</b>ことで、これは事実です。素体をそろえた時点で降りられるなら、浮いた石はそのまま次の限定・恒常募集へ回せます。</p><h3>素体をそろえるまでの費用</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result).join('')}</tbody></table><p class="note">2名なら1,441石、12連ぶん安く上がります。ただし差は狙う人数が増えるほど縮み、<b>4名では逆に呼出ポイントのほうが268石安くなります</b>。新仕様の強みは、狙う人数が少ないときに限って効きます。</p><h3>同じ石を積んだ場合に持ち帰る文字</h3><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result).join('')}</tbody></table><p class="note">同じ石を積むなら、旧仕様のほうが400連で64〜70文字多く持ち帰ります。浮く石の12連ぶんを恒常募集へ回しても星3は0.36人ぶんで、64文字は固有2の19%にあたります。この二つを同じ物差しで比べることはできません。それでも、降りられる代わりに毎回この差を払い続けることになります。</p></section>
 <section class="panel"><h2>旧仕様なら上振れを選びにいける</h2><p>ならば旧仕様にも上振れはあるはずだ、という話になります。呼出ポイントは<b>水着イロハを指名し続けたまま、200連ごとの交換枠を使い分けられます</b>。この自由度が新仕様には存在しません。</p><p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p><p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p><h3>400連・交換2枠の使い道</h3><table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>交換枠の流し先</th><th>持ち帰る文字</th><th>イロハ固有2</th><th>イブキ確保</th></tr></thead><tbody>${exchangePlanRows(result).join('')}</tbody></table><p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p><h3>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h3>${jointTable(result, 400, 'subThenMain')}<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p></section>
-<section class="panel"><h2>実際にはどこで降りるのか</h2><p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p><h3>2PU（水着イロハ・水着イブキ）</h3><table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 2)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 2).join('')}</tbody></table><p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。</p><p class="note">どちらの場合も期待文字は300前後にとどまります。イブキが素体確保で十分な性能なら、これで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p><h3>3PU（水着イロハ・水着イブキ・制服ネル）</h3><table><colgroup><col style="width:28%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:15%"><col style="width:15%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 3)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 3).join('')}</tbody></table><p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p></section>
-<section class="panel"><h2>凸のどこまで届くか</h2><table><colgroup><col style="width:22%"><col style="width:22%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th>到達段位</th><th>必要文字</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead><tbody>${milestoneRows(result).join('')}</tbody></table><p class="note">3名を狙った場合に、対象3名分を合計した文字が段位のコストへ届く連数です。1名へ集中させた場合の数字ではありません。星3を出発点として星4に100文字、固有1にさらに120文字、固有2に120文字、固有3に180文字、固有4に200文字が必要です。</p></section>
-<section class="panel"><h2>区切りまで回したときの到達率</h2><table><colgroup><col style="width:16%"><col style="width:16%"><col style="width:34%"><col style="width:34%"></colgroup><thead><tr><th>狙う人数</th><th>連数</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead>${reachRows(result).join('')}</table><p class="note">呼出ポイントは200連ごとに1名を確実に交換できるため、区切りちょうどで見ると呼出チャージより高くなります。狙う人数が増えるほど差は開きます。</p></section>
-<section class="panel"><h2>降りどきが選べるかどうか</h2><p>呼出チャージは全員そろうまで降りにくく、呼出ポイントは200連ごとに続行か撤退かを選べます。下は呼出チャージで全員の素体がそろう連数の散らばりで、半分の先生は中央値で降りられますが、残り半分はそこから先も払い続けることになります。</p><table><colgroup><col style="width:20%"><col style="width:20%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>狙う人数</th><th>半数</th><th>4人に3人</th><th>10人に9人</th><th>最悪</th></tr></thead><tbody>${riskRows(result).join('')}</tbody></table><p class="note">呼出ポイントなら200連で1名分の交換が確定するため、同じ予算を決め打ちで投じても手ぶらになりません。呼出チャージは天井が200連ごとに区切られる点は同じですが、自引きがそのままチャージを消費するので、取得機会が交換ぶんだけ少なくなります。</p></section>
-<section class="panel"><h2>すり抜け狙いは作戦になるか</h2><p>指名した生徒を引き当てる前にすり抜けが来れば、その生徒を交換に回して<b>重複100文字＋初回ボーナス100文字＋50欠片</b>を一度に得られます。狙う価値があるかを測るため、1人目を引き当てるまでにすり抜けが来る確率を出しました。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>待っている枠</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody><tr><th>1枠</th><td>8.43%</td><td class="best">12.50%</td><td>+4.07pt</td></tr><tr><th>2枠</th><td>15.86%</td><td class="best">22.22%</td><td>+6.36pt</td></tr><tr><th>3枠</th><td>22.45%</td><td class="best">30.00%</td><td>+7.55pt</td></tr></tbody></table><p class="note">呼出ポイントが上回るのは、1人目にかかる平均が142.9連と長く、その間ずっと枠が生きているからです。呼出チャージは90.1連で決着してしまい、100連目の50%と200連目の確定枠に待ち時間を打ち切られます。</p><p class="note">ただし、これを積極的に狙う価値はありません。すり抜け済みの生徒を優先して交換に回しても、400連で得られる文字は3文字しか増えず（3名狙いで504文字が507文字）、素体のそろう確率は2.7pt下がります。さらに、すり抜け枠を保つために既所持の生徒を指名し続ける「片方寄せ」まで踏み込むと、文字は36文字増える一方で素体は29.7pt落ちます。指名は0.7%、すり抜けは1枠あたり0.1%です。3.5倍強い手段を捨てて枠を温存する取引は、どう組んでも割に合いません。</p></section>
-<section class="panel"><h2>そろうまでの期待募集回数</h2><table><colgroup><col style="width:20%"><col style="width:40%"><col style="width:40%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead><tbody>${expectationRows(result).join('')}</tbody></table><p class="note">区切りを気にせず引き続けた場合の平均です。到達率の表とは逆に、2名・3名では呼出チャージのほうが短く済みます。区切りで止めるか揃うまで回すかで、有利な仕様が入れ替わります。</p></section>
-<section class="panel"><h2>99連を次の限定募集へ持ち越す</h2><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p><p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>${banking.guaranteedWithinBanked}連目</b>には199の確定枠へ届きます。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>1人を確保するまで</th><th>期待</th><th>最大</th><th>短縮</th></tr></thead><tbody><tr><th>チャージ0から</th><td>${banking.expectedPullsPlain.toFixed(1)}連</td><td>${banking.guaranteedWithinPlain}連</td><td>—</td></tr><tr><th>チャージ99から</th><td class="best">${banking.expectedPullsBanked.toFixed(1)}連</td><td class="best">${banking.guaranteedWithinBanked}連</td><td class="best">−${banking.savedPulls.toFixed(1)}連</td></tr></tbody></table><p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p><h3>どこで99連を貯めるか</h3><p>同じ99連でも、貯める場所によって副産物が変わります。フェス限定募集は星3が <b>${pct(rates.festivalStar3)}</b> なので99連あたり期待 <b>${banking.festivalStar3PerBank.toFixed(2)}人</b>。限定募集は <b>${pct(rates.limitedStar3)}</b> のままなので <b>${banking.limitedStar3PerBank.toFixed(2)}人</b> にとどまります。貯めるなら星3が倍のフェス限定募集のあいだに進めておくほうが、同じ連数で多く拾えます。</p><p class="note">ただし恒常星3の価値は1人あたり30文字と50欠片で、欲しい生徒が恒常の分母にどれだけ含まれるか次第です。「倍拾える」がそのまま「倍うれしい」にはなりません。</p><p class="note">また、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>${pct(banking.survivalToBank)}</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p></section>
+<section class="panel"><h2>実際にはどこで降りるのか</h2><p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p><h3>2PU（水着イロハ・水着イブキ）</h3><table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 2)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 2).join('')}</tbody></table><p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。</p><p class="note">どちらの場合も期待文字は300前後にとどまります。イブキが素体確保で十分な性能なら、これで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p><h3>3PU（水着イロハ・水着イブキ・制服ネル）</h3><table><colgroup><col style="width:28%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:15%"><col style="width:15%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 3)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 3).join('')}</tbody></table><p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p><h3>4PU（対象4名すべて）</h3><table><colgroup><col style="width:26%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 4)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 4).join('')}</tbody></table><p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p><p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
 <script>const puTabs=[...document.querySelectorAll('[data-pu]')],puPanels=[...document.querySelectorAll('[data-pu-panel]')];const selectPu=value=>{puTabs.forEach(tab=>{const on=tab.dataset.pu===value;tab.setAttribute('aria-selected',String(on));tab.tabIndex=on?0:-1});puPanels.forEach(panel=>{panel.hidden=panel.dataset.puPanel!==value});document.getElementById('pu-panel').setAttribute('aria-labelledby','tab-'+value+'pu')};puTabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectPu(tab.dataset.pu));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();let next=index;if(event.key==='ArrowLeft')next=(index-1+puTabs.length)%puTabs.length;if(event.key==='ArrowRight')next=(index+1)%puTabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=puTabs.length-1;puTabs[next].focus();selectPu(puTabs[next].dataset.pu)})});</script></body></html>`;
 }
@@ -867,6 +802,8 @@ const ENGLISH_REPLACEMENTS = [
   ['<td>旧が', '<td>Points by '],
   ['石安い</td>', ' Pyroxene</td>'],
   ['石</td>', ' Pyroxene</td>'],
+  ['連</td>', ' pulls</td>'],
+  ['文字</td>', ' Eleph</td>'],
   ['連<small>', ' pulls<small>'],
   ['石</small>', ' Pyroxene</small>'],
   [
@@ -888,23 +825,9 @@ const ENGLISH_REPLACEMENTS = [
     '<p>ならば旧仕様にも上振れはあるはずだ、という話になります。呼出ポイントは<b>水着イロハを指名し続けたまま、200連ごとの交換枠を使い分けられます</b>。この自由度が新仕様には存在しません。</p>',
     '<p>So the natural question is whether the old system has upside of its own. It does: Recruitment Points lets you <b>stay on Swimsuit Iroha the whole way while directing each 200-point exchange where it helps most</b>. Recruitment Charge offers no such choice.</p>',
   ],
-  [
-    '<p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p>',
-    '<p>That said, <b>letting a festival student slip away is never an option</b>. If Ibuki is not owned, the first exchange always goes to securing her. The new system reaches that same point reliably too, so nothing separates them here.</p>',
-  ],
-  [
-    '<p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p>',
-    '<p>The difference shows up in the second exchange. What it is worth depends on who you spend it on: a student you do not own yields the unit plus a 100 Eleph first-time bonus, while one you already own whose bonus is still unspent — say <b>a player sitting on Uniform Nel at UE3</b> — pays 100 Eleph for the duplicate plus the 100 Eleph bonus, for <b>200 Eleph</b>.</p>',
-  ],
-  ['<h3>400連・交換2枠の使い道</h3>', '<h3>Spending the two exchanges over 400 pulls</h3>'],
   ['<th>交換枠の流し先</th>', '<th>Where the exchanges go</th>'],
-  ['<th>イロハ固有2</th>', '<th>Iroha at UE2</th>'],
   ['<th>イブキ確保</th>', '<th>Ibuki owned</th>'],
   // 長い本文を先に置換する。あとに続く短いラベルが本文の一部を書き換えてしまうため。
-  [
-    '<p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p>',
-    '<p class="note">With Ibuki secured, sending the second exchange into Iroha lifts her UE2 rate to 77.0%, while sending it into an already-owned Nel adds 100 Eleph for 605 total. Push the featured attacker further, or push a student already on your roster — <b>having that choice at all is worth something the new system does not offer.</b> Recruitment Charge has no second exchange to spend.</p>',
-  ],
   ['イブキを確保 → 残りはイロハ', 'Secure Ibuki, then Iroha'],
   ['イブキを確保 → 残りは既所持のネル', 'Secure Ibuki, then owned Nel'],
   ['<h3>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h3>', '<h3>How many arrive over 400 pulls (secure Ibuki, then Iroha)</h3>'],
@@ -940,113 +863,43 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">Put another way, it buys 76 Eleph for 7,837 Pyroxene. That is a fair trade if an attacker needs UE2 soon, but if the goal is to own everyone and carry Pyroxene into the next banner, switching as each student lands is cheaper. <b>Having that call to make at all belongs to Recruitment Points alone.</b></p>',
   ],
   // 表のラベルは本文より後に置く。先に適用すると本文の一部を書き換えてしまう。
+  ['体以上', '+'],
+  [
+    '<p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p>',
+    '<p>That said, <b>letting a festival student slip away is never an option</b>. If Ibuki is not owned, the first exchange always goes to securing her. The new system reaches that same point reliably too, so nothing separates them here.</p>',
+  ],
+  [
+    '<p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p>',
+    '<p>The difference shows up in the second exchange. What it is worth depends on who you spend it on: a student you do not own yields the unit plus a 100 Eleph first-time bonus, while one you already own whose bonus is still unspent — say <b>a player sitting on Uniform Nel at UE3</b> — pays 100 Eleph for the duplicate plus the 100 Eleph bonus, for <b>200 Eleph</b>.</p>',
+  ],
+  ['<h3>400連・交換2枠の使い道</h3>', '<h3>Spending the two exchanges over 400 pulls</h3>'],
+  ['<th>イロハ固有2</th>', '<th>Iroha at UE2</th>'],
+  [
+    '<p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p>',
+    '<p class="note">With Ibuki secured, sending the second exchange into Iroha lifts her UE2 rate to 77.0%, while sending it into an already-owned Nel adds 100 Eleph for 605 total. Push the featured attacker further, or push a student already on your roster — <b>having that choice at all is worth something the new system does not offer.</b> Recruitment Charge has no second exchange to spend.</p>',
+  ],
+  ['<h3>4PU（対象4名すべて）</h3>', '<h3>Four students (every featured student)</h3>'],
+  [
+    '<p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p>',
+    '<p class="note">Going after all four, even switching as each one lands leaves you <b>only a 26.6% chance of stopping at 200 pulls</b>; six in ten run to 400 and better than one in ten to 600. Staying on Iroha drops that release rate to 6.6% and costs 58,633 Pyroxene on average — 13,886 more than switching.</p>',
+  ],
+  [
+    '<p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p>',
+    '<p class="note">At this scale the choice between focusing and switching matters less than the plain fact that <b>walking away early is barely an option</b>. Going after four featured students is a heavy commitment under either system.</p>',
+  ],
   ['イロハに集中', 'Stay on Iroha'],
   ['引けたら次の生徒へ', 'Move on after each hit'],
-  ['体以上', '+'],
   ['イロハ', 'Iroha '],
   ['イブキ', 'Ibuki '],
   ['体</th>', '</th>'],
-  ['<h2>凸のどこまで届くか</h2>', '<h2>How far up the upgrade track</h2>'],
-  ['<th>到達段位</th>', '<th>Upgrade</th>'],
-  ['<th>必要文字</th>', '<th>Eleph cost</th>'],
-  [
-    '<p class="note">3名を狙った場合に、対象3名分を合計した文字が段位のコストへ届く連数です。1名へ集中させた場合の数字ではありません。星3を出発点として星4に100文字、固有1にさらに120文字、固有2に120文字、固有3に180文字、固有4に200文字が必要です。</p>',
-    '<p class="note">Pull counts at which the Eleph earned across all three targeted students reaches each cost. These are not the figures for funnelling everything into one student. Starting from 3★, reaching 5★ costs 100 Eleph, then UE1 a further 120, UE2 another 120, UE3 another 180, and UE4 another 200.</p>',
-  ],
-  ['＋', '+'],
-  ['文字</td>', ' Eleph</td>'],
   ['>2名<', '>2 students<'],
   ['>3名<', '>3 students<'],
   ['>4名<', '>4 students<'],
-  ['<th>星4</th>', '<th>5★</th>'],
-  ['<th>固有1</th>', '<th>UE1</th>'],
-  ['<th>固有2</th>', '<th>UE2</th>'],
-  ['<th>固有3</th>', '<th>UE3</th>'],
-  ['<th>固有4</th>', '<th>UE4</th>'],
-  ['<h2>区切りまで回したときの到達率</h2>', '<h2>Results at each milestone</h2>'],
-  [
-    '<p class="note">呼出ポイントは200連ごとに1名を確実に交換できるため、区切りちょうどで見ると呼出チャージより高くなります。狙う人数が増えるほど差は開きます。</p>',
-    '<p class="note">Recruitment Points guarantee one exchange every 200 pulls, so exactly at a milestone it beats Recruitment Charge. The gap widens as you target more students.</p>',
-  ],
-  ['<h2>降りどきが選べるかどうか</h2>', '<h2>Whether you get to walk away</h2>'],
-  [
-    '<p>呼出チャージは全員そろうまで降りにくく、呼出ポイントは200連ごとに続行か撤退かを選べます。下は呼出チャージで全員の素体がそろう連数の散らばりで、半分の先生は中央値で降りられますが、残り半分はそこから先も払い続けることになります。</p>',
-    '<p>Recruitment Charge is hard to walk away from until everyone is owned, whereas Recruitment Points lets you decide whether to continue every 200 pulls. Below is the spread of pulls needed to own every student under Recruitment Charge: half of players stop at the median, and the other half keep paying past it.</p>',
-  ],
-  ['<th>半数</th>', '<th>Half</th>'],
-  ['<th>4人に3人</th>', '<th>3 in 4</th>'],
-  ['<th>10人に9人</th>', '<th>9 in 10</th>'],
-  ['<th>最悪</th>', '<th>Worst case</th>'],
-  [
-    '<p class="note">呼出ポイントなら200連で1名分の交換が確定するため、同じ予算を決め打ちで投じても手ぶらになりません。呼出チャージは天井が200連ごとに区切られる点は同じですが、自引きがそのままチャージを消費するので、取得機会が交換ぶんだけ少なくなります。</p>',
-    '<p class="note">Recruitment Points guarantees one exchange at 200 pulls, so committing a fixed budget never leaves you empty-handed. Recruitment Charge also guarantees a student every 200 pulls, but because pulling one consumes the charge, it ends up with fewer acquisition chances by exactly the value of that exchange.</p>',
-  ],
-  ['<h2>すり抜け狙いは作戦になるか</h2>', '<h2>Is chasing off-target pulls a strategy?</h2>'],
-  [
-    // このパターンより前で「＋」が半角に置換済みのため、置換後の姿で指定する。
-    '<p>指名した生徒を引き当てる前にすり抜けが来れば、その生徒を交換に回して<b>重複100文字+初回ボーナス100文字+50欠片</b>を一度に得られます。狙う価値があるかを測るため、1人目を引き当てるまでにすり抜けが来る確率を出しました。</p>',
-    '<p>If an off-target pull lands before you hit the student you selected, exchanging for that same student pays <b>100 Eleph for the duplicate, 100 more from the unspent first-time bonus, and 50 shards</b> all at once. To judge whether that is worth chasing, here is the chance an off-target pull arrives before your first hit.</p>',
-  ],
-  ['<th>待っている枠</th>', '<th>Slots waiting</th>'],
   ['<th>差</th>', '<th>Gap</th>'],
-  ['<th>1枠</th>', '<th>1 slot</th>'],
-  ['<th>2枠</th>', '<th>2 slots</th>'],
-  ['<th>3枠</th>', '<th>3 slots</th>'],
-  [
-    '<p class="note">呼出ポイントが上回るのは、1人目にかかる平均が142.9連と長く、その間ずっと枠が生きているからです。呼出チャージは90.1連で決着してしまい、100連目の50%と200連目の確定枠に待ち時間を打ち切られます。</p>',
-    '<p class="note">Recruitment Points wins here because its first hit takes 142.9 pulls on average, keeping the slots alive that whole time. Recruitment Charge settles in 90.1 pulls, with the 50% slot at pull 100 and the guarantee at pull 200 cutting the wait short.</p>',
-  ],
-  [
-    '<p class="note">ただし、これを積極的に狙う価値はありません。すり抜け済みの生徒を優先して交換に回しても、400連で得られる文字は3文字しか増えず（3名狙いで504文字が507文字）、素体のそろう確率は2.7pt下がります。さらに、すり抜け枠を保つために既所持の生徒を指名し続ける「片方寄せ」まで踏み込むと、文字は36文字増える一方で素体は29.7pt落ちます。指名は0.7%、すり抜けは1枠あたり0.1%です。3.5倍強い手段を捨てて枠を温存する取引は、どう組んでも割に合いません。</p>',
-    '<p class="note">Chasing it deliberately is still not worth it. Prioritising an off-target student for the exchange adds only 3 Eleph over 400 pulls (504 becomes 507 when targeting three), while the chance of owning everyone drops 2.7pt. Going further and holding a student you already own just to keep the slots open gains 36 Eleph but costs 29.7pt of completion. Selecting is a 0.7% chance; each waiting slot is 0.1%. Trading away a method 3.5 times stronger to preserve those slots never pays off.</p>',
-  ],
-  ['<h2>そろうまでの期待募集回数</h2>', '<h2>Expected pulls needed</h2>'],
-  [
-    '<p class="note">区切りを気にせず引き続けた場合の平均です。到達率の表とは逆に、2名・3名では呼出チャージのほうが短く済みます。区切りで止めるか揃うまで回すかで、有利な仕様が入れ替わります。</p>',
-    '<p class="note">This is the long-run average when you keep pulling past the milestones. Opposite to the table above, Recruitment Charge finishes sooner for 2 and 3 students. Which system wins depends on whether you stop at a milestone or pull until everything is complete.</p>',
-  ],
-  ['<h2>99連を次の限定募集へ持ち越す</h2>', '<h2>Carrying 99 pulls into the next limited banner</h2>'],
-  [
-    '<p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p>',
-    '<p>Recruitment Charge carries over within a banner category. Charge built up on a festival banner carries into <b>the next limited or festival banner</b>, while charge from the standard banner carries into the next standard banner.</p>',
-  ],
-  [
-    '<p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>101連目</b>には199の確定枠へ届きます。</p>',
-    '<p>That makes a plan possible: <b>stop at 99 pulls</b> during the festival banner, then open the next limited banner already at charge 99. The 50% guaranteed slot lands on your very first pull, and even if it misses, the charge-199 guarantee arrives on the <b>101st pull</b>.</p>',
-  ],
-  ['<th>1人を確保するまで</th>', '<th>To secure one student</th>'],
-  ['<th>期待</th>', '<th>Expected</th>'],
-  ['<th>最大</th>', '<th>Worst case</th>'],
-  ['<th>短縮</th>', '<th>Saved</th>'],
-  ['<th>チャージ0から</th>', '<th>From charge 0</th>'],
-  ['<th>チャージ99から</th>', '<th>From charge 99</th>'],
-  [
-    '<p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p>',
-    '<p class="note">Carried-over charge only helps with the first student, so the saving is the same no matter how many students you target. The pull counts above exclude the 99 pulls spent building the charge.</p>',
-  ],
-  ['<h3>どこで99連を貯めるか</h3>', '<h3>Where to build the charge</h3>'],
-  [
-    '<p>同じ99連でも、貯める場所によって副産物が変わります。フェス限定募集は星3が <b>6.00%</b> なので99連あたり期待 <b>5.94人</b>。限定募集は <b>3.00%</b> のままなので <b>2.97人</b> にとどまります。貯めるなら星3が倍のフェス限定募集のあいだに進めておくほうが、同じ連数で多く拾えます。</p>',
-    '<p>The same 99 pulls yield different by-products depending on where you spend them. A festival banner runs 3★ at <b>6.00%</b>, so 99 pulls return <b>5.94</b> of them on average, while a limited banner stays at <b>3.00%</b> and returns only <b>2.97</b>. Building the charge during a festival banner collects roughly twice as much for the same number of pulls.</p>',
-  ],
-  [
-    '<p class="note">ただし恒常星3の価値は1人あたり30文字と50欠片で、欲しい生徒が恒常の分母にどれだけ含まれるか次第です。「倍拾える」がそのまま「倍うれしい」にはなりません。</p>',
-    '<p class="note">A duplicate permanent 3★ is worth 30 Eleph and 50 shards, so how much that matters depends on how many students you actually want inside the permanent pool. Twice the pulls does not mean twice the value.</p>',
-  ],
-  [
-    '<p class="note">また、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>49.89%</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p>',
-    '<p class="note">Pulling the student you selected resets the charge to 0, so the plan only survives half the time: the chance of still holding the charge after 99 pulls is <b>49.89%</b>. Banking all the way to 199 to finish the next banner in a single pull fails even more often — about 87.5% lose the charge before reaching it.</p>',
-  ],
   ['<th>狙う人数</th>', '<th>Students</th>'],
-  ['<th>連数</th>', '<th>Pulls</th>'],
   ['<th>呼出チャージ</th>', '<th>Recruitment Charge</th>'],
   ['<th>呼出ポイント</th>', '<th>Recruitment Points</th>'],
-  // クライアント側の文言。ラベルは英語の語順に組み替える。
   // 短い語は最後に。タグ境界を含めて誤爆を防ぐ。
-  ['<small>素体</small>', '<small>owned</small>'],
-  ['<small>ボーナス</small>', '<small>bonus</small>'],
-  ['連</b>', ' pulls</b>'],
-  ['連</td>', ' pulls</td>'],
   ['200連</th>', '200 pulls</th>'],
   ['400連</th>', '400 pulls</th>'],
   ['600連</th>', '600 pulls</th>'],
