@@ -336,74 +336,97 @@ function runFocusExchange(limit, plan) {
  */
 function runBlockRun(targets, { focus }, maxBlocks = 4) {
   const others = targets - 1;
-  let states = new Map([['0:0:0', 1]]);
-  const stopAt = {};
-  const lettersAt = {};
-  let letters = 0;
+  // 各状態は質量と「そこへ到達した質量が積んだ文字の総和」を持つ。
+  // 文字を状態キーに含めないので状態数は増えず、条件付き期待値も取り出せる。
+  let states = new Map([['0:0:0', { mass: 1, letters: 0 }]]);
+  const blocks = [];
   let pulls = 0;
   let live = 1;
 
   for (let block = 1; block <= maxBlocks; block += 1) {
     for (let step = 0; step < EXCHANGE_INTERVAL; step += 1) {
       const next = new Map();
-      const add = (key, mass) => next.set(key, (next.get(key) ?? 0) + mass);
-      for (const [key, mass] of states) {
+      const add = (key, mass, letters) => {
+        const cell = next.get(key) ?? { mass: 0, letters: 0 };
+        cell.mass += mass;
+        cell.letters += letters;
+        next.set(key, cell);
+      };
+      for (const [key, cell] of states) {
         // main=本命の入手数 / pu=指名か交換で得たその他 / spook=すり抜けだけで得たその他
         const [main, pu, spook] = key.split(':').map(Number);
+        const { mass, letters } = cell;
         pulls += mass;
         const ownedOthers = pu + spook;
         const missing = others - ownedOthers;
         const nameMain = focus || main === 0 || missing === 0;
-        // すり抜けは指名していない対象生徒すべてに起きる。未所持なら素体、既所持なら重複30文字。
         const freshRate = SPOOK_EACH_RATE * (nameMain ? missing : Math.max(0, missing - 1));
-        // 本命を指名していないあいだは、本命自身もすり抜けで重なりうる（100文字ではなく30文字）。
         const mainDupRate = nameMain || main === 0 ? 0 : SPOOK_EACH_RATE;
         const otherDupRate = SPOOK_EACH_RATE * ownedOthers;
-        const spookRate = freshRate + mainDupRate + otherDupRate;
-        const miss = 1 - NORMAL_PU_RATE - spookRate;
+        const dupRate = mainDupRate + otherDupRate;
+        const miss = 1 - NORMAL_PU_RATE - freshRate - dupRate;
+        // 分岐したぶんの文字は、元の状態が積んでいた文字を確率で按分して引き継ぐ。
+        const carry = (rate) => (letters * rate) + (mass * rate * 0);
         if (nameMain) {
-          letters += mass * NORMAL_PU_RATE * (main === 0 ? BONUS_LETTERS : PU_DUPLICATE_LETTERS);
-          add(`${Math.min(main + 1, FOCUS_HIT_CAP)}:${pu}:${spook}`, mass * NORMAL_PU_RATE);
+          const gain = main === 0 ? BONUS_LETTERS : PU_DUPLICATE_LETTERS;
+          add(`${Math.min(main + 1, FOCUS_HIT_CAP)}:${pu}:${spook}`,
+            mass * NORMAL_PU_RATE, carry(NORMAL_PU_RATE) + mass * NORMAL_PU_RATE * gain);
         } else {
-          letters += mass * NORMAL_PU_RATE * BONUS_LETTERS;
-          add(`${main}:${pu + 1}:${spook}`, mass * NORMAL_PU_RATE);
+          add(`${main}:${pu + 1}:${spook}`,
+            mass * NORMAL_PU_RATE, carry(NORMAL_PU_RATE) + mass * NORMAL_PU_RATE * BONUS_LETTERS);
         }
-        if (freshRate > 0) add(`${main}:${pu}:${spook + 1}`, mass * freshRate);
-        // 重複ぶんは状態を動かさず、文字だけ積む。
-        letters += mass * (mainDupRate + otherDupRate) * SPOOK_DUPLICATE_LETTERS;
-        add(key, mass * (miss + mainDupRate + otherDupRate));
+        if (freshRate > 0) add(`${main}:${pu}:${spook + 1}`, mass * freshRate, carry(freshRate));
+        if (dupRate > 0) {
+          add(key, mass * dupRate, carry(dupRate) + mass * dupRate * SPOOK_DUPLICATE_LETTERS);
+        }
+        if (miss > 0) add(key, mass * miss, carry(miss));
       }
       states = next;
     }
 
     const exchanged = new Map();
-    const add2 = (key, mass) => exchanged.set(key, (exchanged.get(key) ?? 0) + mass);
-    for (const [key, mass] of states) {
+    const add2 = (key, mass, letters) => {
+      const cell = exchanged.get(key) ?? { mass: 0, letters: 0 };
+      cell.mass += mass;
+      cell.letters += letters;
+      exchanged.set(key, cell);
+    };
+    for (const [key, cell] of states) {
       const [main, pu, spook] = key.split(':').map(Number);
+      const { mass, letters } = cell;
       const missing = others - pu - spook;
-      if (main === 0) { letters += mass * BONUS_LETTERS; add2(`1:${pu}:${spook}`, mass); }
-      else if (missing > 0) { letters += mass * BONUS_LETTERS; add2(`${main}:${pu + 1}:${spook}`, mass); }
+      if (main === 0) add2(`1:${pu}:${spook}`, mass, letters + mass * BONUS_LETTERS);
+      else if (missing > 0) add2(`${main}:${pu + 1}:${spook}`, mass, letters + mass * BONUS_LETTERS);
       else if (spook > 0) {
         // すり抜けで得た生徒は初回ボーナスが残っているので、引き取ると200文字になる。
-        letters += mass * (PU_DUPLICATE_LETTERS + BONUS_LETTERS);
-        add2(`${main}:${pu + 1}:${spook - 1}`, mass);
-      } else { letters += mass * PU_DUPLICATE_LETTERS; add2(`${Math.min(main + 1, FOCUS_HIT_CAP)}:${pu}:${spook}`, mass); }
+        add2(`${main}:${pu + 1}:${spook - 1}`, mass, letters + mass * (PU_DUPLICATE_LETTERS + BONUS_LETTERS));
+      } else {
+        add2(`${Math.min(main + 1, FOCUS_HIT_CAP)}:${pu}:${spook}`, mass, letters + mass * PU_DUPLICATE_LETTERS);
+      }
     }
     states = exchanged;
 
     const keep = new Map();
     let finished = 0;
-    for (const [key, mass] of states) {
+    let finishedLetters = 0;
+    for (const [key, cell] of states) {
       const [main, pu, spook] = key.split(':').map(Number);
-      if (main >= 1 && pu + spook >= others) finished += mass; else keep.set(key, mass);
+      if (main >= 1 && pu + spook >= others) { finished += cell.mass; finishedLetters += cell.letters; }
+      else keep.set(key, cell);
     }
-    stopAt[block * EXCHANGE_INTERVAL] = finished;
-    lettersAt[block * EXCHANGE_INTERVAL] = letters;
+    blocks.push({
+      pulls: block * EXCHANGE_INTERVAL,
+      stopHere: finished,
+      lettersHere: finished > 0 ? finishedLetters / finished : 0,
+    });
     states = keep;
     live -= finished;
     if (live < 1e-12) break;
   }
-  return { stopAt, lettersAt, unfinished: Math.max(0, live), letters, pulls };
+
+  const stopAt = Object.fromEntries(blocks.map((b) => [b.pulls, b.stopHere]));
+  const letters = blocks.reduce((sum, b) => sum + b.stopHere * b.lettersHere, 0);
+  return { blocks, stopAt, unfinished: Math.max(0, live), letters, pulls };
 }
 
 /** 累積確率が p を超える最小の連数。運用上の「どこまで払う覚悟が要るか」を示す。 */
@@ -645,11 +668,13 @@ function retreatSection(result) {
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}</p>
 <h3>素体をそろえるまで</h3><p>呼出チャージには交換がないので、狙った生徒を順番に指名して引き当てるしかありません。素体がそろった時点で撤退する前提で置きます。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>すべて指名で引く</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜けを含む実際</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜けで決着した割合</th><td colspan="2" data-label="すり抜けで決着">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。相方にも固有2が要るなら撤退せず指名を続けることになり、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になって、取り逃した分はそこで戻ります。</p>
 <h3>石はどちらが安いか</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result, target).join('')}</tbody></table><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result, target).join('')}</tbody></table><p class="note">素体をそろえるだけなら${cheaper}が${stoneGap}石ぶん安く上がります。ただし同じ石を積んだときに持ち帰る文字は、一貫して呼出ポイントのほうが多い。降りられる代わりに、その差を毎回払い続ける形です。</p>
-${target === 2 ? EXCHANGE_BLOCK.replace('__EXCHANGE_ROWS__', exchangePlanRows(result).join('')).replace('__JOINT_TABLE__', jointTable(result, 400, 'subThenMain')) : ''}<h3>実際にはどこで降りるのか</h3><p>ここまでは連数を積み切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。そろい切った状態から、文字目当てに追加の200連を回すことはありません。</p><table><colgroup><col style="width:26%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, target)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, target).join('')}</tbody></table>${PU_CLOSING[target]}</div>`;
-  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。ここで指名するのは<b>すでに素体を持っていて初回PUボーナスが未受領の生徒</b>（制服ネルなど）です。引き当てれば重複100文字と初回ボーナス100文字で200文字が入ります。</p><h3>まず、カウンタは無駄になりません</h3><p>99連のあいだに指名生徒が出るとカウンタは0へ戻りますが、<b>そこから先の外れはまた積み上がります</b>。99連を回しきった時点で手元に残るカウンタの期待値は${result.banking.expectedCharge.toFixed(0)}で、次の募集に持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>です。暴発したら全部台無し、にはなりません。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>99連から短縮分を差し引いた持ち出しは <b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名を追う効率が1連あたり${result.banking.lettersPerPull.toFixed(2)}文字なので、文字に直すと<b>${result.banking.costLetters.toFixed(0)}文字</b>ぶんの支出です。受け取るほうを並べます。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで釣り合いを超えており、星3と欠片はまるごと上乗せです。<b>指名生徒の文字をまだ取り切りたい先生には、この仕込みは得になります。</b></p><h3>ただし、出たら必ず止めること</h3><p class="note">指名生徒が出たあとも99連まで回し続けると、その継続分の効率は1連あたり約1.1文字まで落ちます。<b>出た時点で止めれば</b>、持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連ちょうど、つまり指名を素で追うのと同じ効率に収まります。</p><h3>向いている先生・向いていない先生</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素で追うのと同じ石効率のまま、フェス限のすり抜けが丸ごと上乗せされます。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連ぶん返ってきます。</li><li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li></ul></div>`;
+${target === 2 ? EXCHANGE_BLOCK.replace('__EXCHANGE_ROWS__', exchangePlanRows(result).join('')).replace('__JOINT_TABLE__', jointTable(result, 400, 'subThenMain')) : ''}<h3>結論：新旧でどう違うか</h3><p>実戦では<b>素体がそろったブロックの終わりで降ります</b>。呼出ポイントは200連単位でしか降りられないので、そこで終わった場合と残業した場合を分けて並べます。呼出チャージは区切りが無いので平均だけです。</p><table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>仕様と進め方</th><th>確率</th><th>連数</th><th>石</th><th>持ち帰る文字</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${PU_CLOSING[target]}</div>`;
+  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。ここで指名するのは<b>すでに素体を持っていて初回PUボーナスが未受領の生徒</b>（制服ネルなど）です。引き当てれば重複100文字と初回ボーナス100文字で200文字が入ります。</p><h3>まず、カウンタは無駄になりません</h3><p>99連のあいだに指名生徒が出るとカウンタは0へ戻りますが、<b>そこから先の外れはまた積み上がります</b>。99連を回しきった時点で手元に残るカウンタの期待値は${result.banking.expectedCharge.toFixed(0)}で、次の募集に持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>です。暴発したら全部台無し、にはなりません。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>99連から短縮分を差し引いた持ち出しは <b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名を追う効率が1連あたり${result.banking.lettersPerPull.toFixed(2)}文字なので、文字に直すと<b>${result.banking.costLetters.toFixed(0)}文字</b>ぶんの支出です。受け取るほうを並べます。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで釣り合いを超えており、星3と欠片はまるごと上乗せです。<b>指名生徒の文字をまだ取り切りたい先生には、この仕込みは得になります。</b></p><p class="note">なお同じ99連でも、星3が倍のフェス限期間なら欠片は約${result.shardYield.bankGain}枚多く残ります。実際に凸へ回せる分に割り引けば${result.shardYield.bankGainLetters}文字ほどで、判断を変える大きさではありません。</p><h3>ただし、出たら必ず止めること</h3><p class="note">指名生徒が出たあとも99連まで回し続けると、その継続分の効率は1連あたり約1.1文字まで落ちます。<b>出た時点で止めれば</b>、持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連ちょうど、つまり指名を素で追うのと同じ効率に収まります。</p><h3>向いている先生・向いていない先生</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素で追うのと同じ石効率のまま、フェス限のすり抜けが丸ごと上乗せされます。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連ぶん返ってきます。</li><li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li></ul></div>`;
   return `<section class="panel"><h2>狙う人数で選ぶ</h2><p>結論は狙う人数によって変わります。自分に当てはまるタブを選べば、素体をそろえる費用から降りどきまで、その人数ぶんの話がひととおり読めます。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
+// フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
+// フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
 // フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
 const EXCHANGE_PLAN_LABELS = [
   ['subThenMain', 'イブキを確保 → 残りはイロハ'],
@@ -658,31 +683,22 @@ const EXCHANGE_PLAN_LABELS = [
 
 const stone = (pulls) => Math.round(pulls * PYROXENE_PER_PULL).toLocaleString('ja-JP');
 
-const BLOCK_PLAN_LABELS = [['focus', 'イロハに集中'], ['sequential', '引けたら次の生徒へ']];
-
 /** 200連ブロックごとの撤退確率。悲惨な残業がどれだけの確率で起きるかを見る。 */
-function blockStopRows(result, targets) {
-  const plans = result.blockRun[targets];
-  const blocks = [200, 400, 600, 800].filter((pull) => pull in plans.focus.stopAt || pull in plans.sequential.stopAt);
-  return BLOCK_PLAN_LABELS.map(([id, label]) => {
-    const row = plans[id];
-    const cells = blocks.map((pull) => {
-      const value = row.stopAt[pull] ?? 0;
-      const rival = plans[id === 'focus' ? 'sequential' : 'focus'].stopAt[pull] ?? 0;
-      const mark = pull <= 200 && value > rival + 1e-9 ? ' class="best"' : '';
-      return `<td data-label="${pull}連で撤退"${mark}>${(value * 100).toFixed(1)}%</td>`;
-    }).join('');
-    return `<tr><th>${label}</th>${cells}<td data-label="期待消費">${stone(row.pulls)}石</td><td data-label="期待文字">${Math.round(row.letters)}文字</td></tr>`;
-  });
+/** 新旧をひとつの表に並べ、呼出ポイントは降りたブロックごとに分けて示す。 */
+function outcomeRows(result, targets) {
+  const charge = result.retreat[targets].withSpook;
+  const rows = [`<tr><th>呼出チャージ</th><td data-label="確率">—</td><td data-label="連数">${charge.expectedPulls.toFixed(1)}連</td><td data-label="石">${stone(charge.expectedPulls)}石</td><td data-label="持ち帰る文字">${Math.round(charge.letters)}文字</td></tr>`];
+  for (const [id, label] of [['sequential', '呼出ポイント・引けたら次へ'], ['focus', '呼出ポイント・イロハに集中']]) {
+    const plan = result.blockRun[targets][id];
+    plan.blocks.filter((block) => block.stopHere > 0.001).forEach((block, index) => {
+      const head = index === 0 ? `<th rowspan="${plan.blocks.filter((b) => b.stopHere > 0.001).length + 1}">${label}</th>` : '';
+      rows.push(`<tr>${head}<td data-label="確率">${(block.stopHere * 100).toFixed(1)}%</td><td data-label="連数">${block.pulls}連</td><td data-label="石">${(block.pulls * PYROXENE_PER_PULL).toLocaleString('ja-JP')}石</td><td data-label="持ち帰る文字">${Math.round(block.lettersHere)}文字</td></tr>`);
+    });
+    rows.push(`<tr><td data-label="確率">ならして</td><td data-label="連数">${plan.pulls.toFixed(1)}連</td><td data-label="石">${stone(plan.pulls)}石</td><td data-label="持ち帰る文字">${Math.round(plan.letters)}文字</td></tr>`);
+  }
+  return rows;
 }
 
-function blockStopHead(result, targets) {
-  const plans = result.blockRun[targets];
-  const blocks = [200, 400, 600, 800].filter((pull) => pull in plans.focus.stopAt || pull in plans.sequential.stopAt);
-  return blocks.map((pull) => `<th>${pull}連</th>`).join('');
-}
-
-/** 素体をそろえるまでに何石かかるか。新仕様の言い分をそのまま数字にする。 */
 function costRows(result, only) {
   return (only ? [only] : TARGETS).map((target) => {
     const charge = result.scenarios.charge[target].expectedPullsToAllBase;
@@ -755,9 +771,8 @@ function renderFestivalHtml(result) {
   const rates = result.rates;
   const banking = result.banking;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5.5フェス限の新旧比較</title><link rel="stylesheet" href="css/festival.css"></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5フェス限の新旧比較</h1>${GITHUB_LINK}</div><p class="lead">フェス限定募集は星3が6%へ倍化し、指名していないフェス限生徒も出現します。この「すり抜け」で狙っている別の生徒が手に入るため、呼出ポイントの200連区切りが有利になる場面があります。</p></header>
-<section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率は <b>${pct(rates.festivalStar3)}</b>。</li><li>指名した1名の排出率は <b>${pct(rates.namedPu)}</b>。呼出チャージではチャージ99で50%、199で100%。</li><li>新旧フェス限10名から指名中の1名を除いた<b>9名</b>が <b>${pct(rates.spookPoolTotal)}</b> を等分し、1名あたり <b>${pct(rates.spookEach)}</b>。</li><li>残る <b>${pct(rates.otherStar3)}</b> は恒常星3で、内訳として記録するだけで計算には使いません。</li><li>初回PUボーナスは<b>指名PUの自引きと呼出ポイント交換</b>でのみ得られます。すり抜けで確保しても付きません。</li><li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li><li>文字と欠片は分けて数えます。欠片は手持ちが潤沢な先生が多く、文字と同じ重みでは扱えないためです。</li></ul></details></section>
+<section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率は <b>${pct(rates.festivalStar3)}</b>。</li><li>指名した1名の排出率は <b>${pct(rates.namedPu)}</b>。呼出チャージではチャージ99で50%、199で100%。</li><li>新旧フェス限10名から指名中の1名を除いた<b>9名</b>が <b>${pct(rates.spookPoolTotal)}</b> を等分し、1名あたり <b>${pct(rates.spookEach)}</b>。</li><li>残る <b>${pct(rates.otherStar3)}</b> は恒常星3で、内訳として記録するだけで計算には使いません。</li><li>初回PUボーナスは<b>指名PUの自引きと呼出ポイント交換</b>でのみ得られます。すり抜けで確保しても付きません。</li><li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li><li>文字と欠片は分けて数えます。欠片は手持ちが潤沢な先生が多く、文字と同じ重みでは扱えないためです。</li><li>欠片の取り分はフェス限定募集で10連あたり80枚として扱います（平常時は50枚）。新旧どちらの仕様でも変わらないため、比較には影響しません。</li></ul></details></section>
 ${retreatSection(result)}
-<section class="panel"><h2>1連の重さは違うが、決め手にはならない</h2><p>ここまで石は「何連引けるか」としてだけ数えてきました。ですが1連から返ってくるものも期間で違います。フェス限定募集は星3が6%へ倍化するので、同じ10連でも手元に残る欠片が増えます。</p><table><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><thead><tr><th>引いた量</th><th>平常時</th><th>フェス限期間</th></tr></thead><tbody><tr><th>10連（1,200石）</th><td data-label="平常時">${result.shardYield.perPullNormal * 10}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perPullFestival * 10}欠片</td></tr><tr><th>200連（24,000石）</th><td data-label="平常時">${result.shardYield.perBlockNormal.toLocaleString('ja-JP')}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perBlockFestival.toLocaleString('ja-JP')}欠片</td></tr><tr><th>200連あたりの差</th><td colspan="2" data-label="差">${result.shardYield.blockGain}欠片（文字に直して約${result.shardYield.blockGainLetters}文字）</td></tr></tbody></table><p class="note">この差は指名にも交換にも関係なく、引いた回数だけで付いてきます。ただし<b>拾った欠片がそのまま戦力になるわけではありません</b>。多くの生徒は育成対象にならず、育てる生徒は先に欠片交換で固有2まで上げ終えています。実際に凸へ回せるのは多く見ても1割程度で、しかも安い交換段は使い切っているので5欠片で1文字です。</p><p class="note">そう割り引くと、200連あたり<b>${result.shardYield.blockGain}欠片</b>の差は実質<b>${result.shardYield.blockGainLetters}文字</b>ぶんにしかなりません。フェス限期間に引くほうが得なのは確かですが、<b>仕様の優劣を動かすほどの差ではありません</b>。</p><p class="note">欠片の枚数も、使える割合の1割も、体感からの概算です。星2・星1の内訳が確定すれば数字は動きますが、名目の欠片数ほどには効かないという結論は変わりません。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
 <script src="js/festival.js" defer></script></body></html>`;
 }
@@ -768,6 +783,8 @@ ${retreatSection(result)}
  */
 const ENGLISH_REPLACEMENTS = [
   ['<html lang="ja">', '<html lang="en">'],
+  ['イブキを確保 → 残りはイロハ', 'Secure Ibuki, then Iroha'],
+  ['イブキを確保 → 残りは既所持のネル', 'Secure Ibuki, then owned Nel'],
   ['href="css/festival.css"', 'href="../css/festival.css"'],
   ['src="js/festival.js"', 'src="../js/festival.js"'],
   ['<title>5.5フェス限の新旧比較</title>', '<title>5.5th Anniversary Festival Comparison</title>'],
@@ -779,7 +796,7 @@ const ENGLISH_REPLACEMENTS = [
   ],
   ['<summary>計算に使う前提</summary>', '<summary>Assumptions</summary>'],
   [
-    '<li>文字と欠片は分けて数えます。欠片は手持ちが潤沢な先生が多く、文字と同じ重みでは扱えないためです。</li>',
+    '<li>文字と欠片は分けて数えます。欠片は手持ちが潤沢な先生が多く、文字と同じ重みでは扱えないためです。</li><li>欠片の取り分はフェス限定募集で10連あたり80枚として扱います（平常時は50枚）。新旧どちらの仕様でも変わらないため、比較には影響しません。</li>',
     '<li>Eleph and shards are counted separately. Most players sit on a large shard stock, so shards cannot carry the same weight as Eleph.</li>',
   ],
   ['<li>フェス限定募集の星3排出率は <b>6.00%</b>。</li>', '<li>The 3★ rate during festival recruitment is <b>6.00%</b>.</li>'],
@@ -804,6 +821,32 @@ const ENGLISH_REPLACEMENTS = [
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
+  ['<h3>ただし、出たら必ず止めること</h3>', '<h3>But stop the moment she arrives</h3>'],
+  [
+    '<p class="note">なお同じ99連でも、星3が倍のフェス限期間なら欠片は約',
+    '<p class="note">The same 99 pulls inside the festival, where 3★ runs at double, also leave about ',
+  ],
+  [
+    '枚多く残ります。実際に凸へ回せる分に割り引けば',
+    ' more shards. Discounted to what actually reaches a build that is roughly ',
+  ],
+  ['文字ほどで、判断を変える大きさではありません。</p>', ' Eleph — not enough to sway the decision.</p>'],
+
+  ['<th>仕様と進め方</th>', '<th>System and approach</th>'],
+  ['<th>連数</th>', '<th>Pulls</th>'],
+  ['<th>石</th>', '<th>Pyroxene</th>'],
+  ['<th>呼出チャージ</th>', '<th>Recruitment Charge</th>'],
+  ['呼出ポイント・引けたら次へ', 'Recruitment Points, moving on'],
+  ['呼出ポイント・イロハに集中', 'Recruitment Points, staying on Iroha'],
+  ['>ならして<', '>Overall<'],
+  ['data-label="連数"', 'data-label="Pulls"'],
+  ['data-label="石"', 'data-label="Pyroxene"'],
+  ['<h3>結論：新旧でどう違うか</h3>', '<h3>The verdict, side by side</h3>'],
+  [
+    '<p>実戦では<b>素体がそろったブロックの終わりで降ります</b>。呼出ポイントは200連単位でしか降りられないので、そこで終わった場合と残業した場合を分けて並べます。呼出チャージは区切りが無いので平均だけです。</p>',
+    '<p>In practice you <b>stop at the end of the block where the last student arrives</b>. Recruitment Points can only exit on a 200-pull boundary, so the runs that finish there and the ones that go into overtime are listed separately. Recruitment Charge has no such boundary, so only its average is shown.</p>',
+  ],
+
   [
     '<p>結論は狙う人数によって変わります。自分に当てはまるタブを選べば、素体をそろえる費用から降りどきまで、その人数ぶんの話がひととおり読めます。</p>',
     '<p>The answer depends on how many students you are after. Pick the tab that matches you and the whole case for that count reads through in one place, from the cost of owning everyone to when to walk away.</p>',
@@ -865,63 +908,19 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">With Ibuki secured, the second exchange into Iroha lifts her UE2 rate to 77.0%; into an already-owned Nel it adds 100 Eleph for 605 total. Push the featured attacker, or push someone already on your roster — <b>having that choice at all is worth something the new system does not offer.</b></p>',
   ],
   ['<h4>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h4>', '<h4>Copies over 400 pulls (secure Ibuki, then Iroha)</h4>'],
-  ['<h3>実際にはどこで降りるのか</h3>', '<h3>Where the run actually ends</h3>'],
-  [
-    '<p>ここまでは連数を積み切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。そろい切った状態から、文字目当てに追加の200連を回すことはありません。</p>',
-    '<p>Everything above assumed the pulls were spent in full. In practice you <b>stop at the end of the block where the last student arrives</b>. Nobody spends another 200 pulls on a finished roster just to farm Eleph.</p>',
-  ],
   [
     '<p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。期待文字はどちらも300前後で、イブキが素体確保で十分な性能ならこれで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p>',
     '<p class="note">With two students the approach does not change when you get to stop: <b>about 80% are released at 200 pulls, the remaining 20% face 400</b>. Staying on Iroha leaves 8 more Eleph from duplicates but assembles the roster just as fast. Either way the haul lands near 300 Eleph, which is enough if simply owning Ibuki does the job. If Ibuki needs UE2 as well, that <b>falls well short of 340</b> and this banner alone will not finish it.</p>',
   ],
-  ['<h2>1連の重さは違うが、決め手にはならない</h2>', '<h2>A single pull is worth more during the festival</h2>'],
-  [
-    '<p>ここまで石は「何連引けるか」としてだけ数えてきました。ですが1連から返ってくるものも期間で違います。フェス限定募集は星3が6%へ倍化するので、同じ10連でも手元に残る欠片が増えます。</p>',
-    '<p>Pyroxene has been counted only as "how many pulls it buys". But what a pull returns also differs by period: festival recruitment doubles the 3★ rate to 6%, so the same ten pulls leave more shards behind.</p>',
-  ],
-  ['<th>引いた量</th>', '<th>Pulls made</th>'],
-  ['<th>平常時</th>', '<th>Normal</th>'],
-  ['<th>フェス限期間</th>', '<th>Festival</th>'],
-  ['<th>10連（1,200石）</th>', '<th>10 pulls (1,200 Pyroxene)</th>'],
-  ['<th>200連（24,000石）</th>', '<th>200 pulls (24,000 Pyroxene)</th>'],
-  ['<th>200連あたりの差</th>', '<th>Gap per 200 pulls</th>'],
-  ['data-label="差"', 'data-label="Gap"'],
-  ['data-label="平常時"', 'data-label="Normal"'],
-  ['data-label="フェス限期間"', 'data-label="Festival"'],
 
   ['<th>交換枠の流し先</th>', '<th>Where the exchanges go</th>'],
   ['<th>イブキ確保</th>', '<th>Ibuki owned</th>'],
   // 長い本文を先に置換する。あとに続く短いラベルが本文の一部を書き換えてしまうため。
-  ['イブキを確保 → 残りはイロハ', 'Secure Ibuki, then Iroha'],
-  ['イブキを確保 → 残りは既所持のネル', 'Secure Ibuki, then owned Nel'],
   ['<th>お迎え数</th>', '<th>Copies</th>'],
   [
     '<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p>',
     '<p class="note">Three copies of Iroha come to 353 Eleph, which clears UE2. On this plan <b>Ibuki always arrives at least once</b>, and Iroha still reaches three or more copies 77.0% of the time.</p>',
   ],
-  [
-    '<p class="note">この差は指名にも交換にも関係なく、引いた回数だけで付いてきます。ただし<b>拾った欠片がそのまま戦力になるわけではありません</b>。多くの生徒は育成対象にならず、育てる生徒は先に欠片交換で固有2まで上げ終えています。実際に凸へ回せるのは多く見ても1割程度で、しかも安い交換段は使い切っているので5欠片で1文字です。</p>',
-    '<p class="note">This gap accrues from the pulls alone, with no bearing on selecting or exchanging. But <b>shards picked up are not the same as combat power</b>. Most students never enter a build at all, and the ones that do were taken to UE2 through the shard shop long ago. At best a tenth of what you collect finds a use, and by then the cheap exchange tiers are spent, so it costs five shards per Eleph.</p>',
-  ],
-  [
-    '<p class="note">そう割り引くと、200連あたり<b>',
-    '<p class="note">Discounted that way, the <b>',
-  ],
-  [
-    '欠片</b>の差は実質<b>',
-    ' shard</b> gap per 200 pulls is really worth about <b>',
-  ],
-  [
-    '文字</b>ぶんにしかなりません。フェス限期間に引くほうが得なのは確かですが、<b>仕様の優劣を動かすほどの差ではありません</b>。</p>',
-    ' Eleph</b>. Pulling during the festival is still the better deal, but <b>not by enough to change which system comes out ahead</b>.</p>',
-  ],
-  [
-    '<p class="note">欠片の枚数も、使える割合の1割も、体感からの概算です。星2・星1の内訳が確定すれば数字は動きますが、名目の欠片数ほどには効かないという結論は変わりません。</p>',
-    '<p class="note">Both the shard counts and the one-tenth usable share are estimates from play. Pinning down the 2★ and 1★ breakdown will move the numbers, but not the conclusion: the nominal shard total overstates what you actually gain.</p>',
-  ],
-  ['欠片</td>', ' shards</td>'],
-  ['欠片（文字に直して約', ' shards (about '],
-  ['文字）</td>', ' Eleph)</td>'],
   ['data-pu="bank">99連</button>', 'data-pu="bank">Banking</button>'],
   ['連</b>（', ' pulls</b> ('],
   [
@@ -940,7 +939,6 @@ const ENGLISH_REPLACEMENTS = [
   ['<th>次の募集での短縮</th>', '<th>Shortening carried</th>'],
   ['<th>一度も出ずカウンタ99</th>', '<th>No hit, counter at 99</th>'],
   ['<th>途中で出た（カウンタは積み直し）</th>', '<th>Hit along the way (counter rebuilt)</th>'],
-  ['<th>ならして</th>', '<th>Overall</th>'],
   ['data-label="確率"', 'data-label="Chance"'],
   ['data-label="次の募集での短縮"', 'data-label="Shortening carried"'],
   ['">平均', '">avg '],
@@ -969,7 +967,6 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">文字だけで釣り合いを超えており、星3と欠片はまるごと上乗せです。<b>指名生徒の文字をまだ取り切りたい先生には、この仕込みは得になります。</b></p>',
     '<p class="note">Eleph alone already clears the bar, with the 3★ students and shards stacked on top. <b>For anyone still collecting Eleph on the selected student, this plan pays.</b></p>',
   ],
-  ['<h3>ただし、出たら必ず止めること</h3>', '<h3>But stop the moment she arrives</h3>'],
   [
     '<p class="note">指名生徒が出たあとも99連まで回し続けると、その継続分の効率は1連あたり約1.1文字まで落ちます。<b>出た時点で止めれば</b>、持ち出しは',
     '<p class="note">Carrying on to 99 pulls after the hit drops the efficiency of those extra pulls to about 1.1 Eleph each. <b>Stop when she lands</b> and the outlay settles at exactly ',
@@ -985,9 +982,6 @@ const ENGLISH_REPLACEMENTS = [
     '<li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li>',
     '<li><b>Not worth it</b> if there is nowhere left to spend Eleph. You are buying shards and 3★ students you will never build. The line is simply whether one student\'s worth of Eleph still has a use.</li>',
   ],
-  ['<th>進め方</th>', '<th>Approach</th>'],
-  ['<th>期待消費</th>', '<th>Expected cost</th>'],
-  ['<th>期待文字</th>', '<th>Expected Eleph</th>'],
   [
     '<p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p>',
     '<p class="note">At three students the approaches split apart. Moving on after each hit raises the chance of stopping at 200 pulls to <b>50.6%</b> and costs 36,640 Pyroxene on average. Staying on Iroha halves that release rate to 25.7% and pushes the cost to 44,477 Pyroxene — but carries away <b>76 more Eleph</b>.</p>',
@@ -1014,14 +1008,9 @@ const ENGLISH_REPLACEMENTS = [
   ['data-label="呼出ポイント"', 'data-label="Recruitment Points"'],
   ['data-label="イロハ固有2"', 'data-label="Iroha at UE2"'],
   ['data-label="イブキ確保"', 'data-label="Ibuki owned"'],
-  ['data-label="期待消費"', 'data-label="Expected cost"'],
-  ['data-label="期待文字"', 'data-label="Expected Eleph"'],
   ['連 チャージ"', ' pulls, Charge"'],
   ['連 ポイント"', ' pulls, Points"'],
   ['連 差"', ' pulls, gap"'],
-  ['連で撤退"', ' pulls"'],
-  ['イロハに集中', 'Stay on Iroha'],
-  ['引けたら次の生徒へ', 'Move on after each hit'],
   ['イロハ', 'Iroha '],
   ['イブキ', 'Ibuki '],
   ['体</th>', '</th>'],
@@ -1031,13 +1020,7 @@ const ENGLISH_REPLACEMENTS = [
   ['>4名<', '>4 students<'],
   ['<th>差</th>', '<th>Gap</th>'],
   ['<th>狙う人数</th>', '<th>Students</th>'],
-  ['<th>呼出チャージ</th>', '<th>Recruitment Charge</th>'],
   ['<th>呼出ポイント</th>', '<th>Recruitment Points</th>'],
-  // 短い語は最後に。タグ境界を含めて誤爆を防ぐ。
-  ['200連</th>', '200 pulls</th>'],
-  ['400連</th>', '400 pulls</th>'],
-  ['600連</th>', '600 pulls</th>'],
-  ['800連</th>', '800 pulls</th>'],
 ];
 
 function renderFestival(result, locale = 'ja') {
