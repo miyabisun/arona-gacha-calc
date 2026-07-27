@@ -6870,6 +6870,21 @@
       }
     }
   },
+  "twoPuBranch": {
+    "bothArrived": 0.13685014061787582,
+    "exchangeForPartner": 0.6177639058448348,
+    "exchangeForMain": 0.04450102990348858,
+    "overtime": 0.20088492363380084
+  },
+  "shardYield": {
+    "perPullNormal": 5,
+    "perPullFestival": 8,
+    "perBlockNormal": 1000,
+    "perBlockFestival": 1600,
+    "blockGain": 600,
+    "blockGainLetters": 160,
+    "bankGain": 297
+  },
   "banking": {
     "bankPulls": 99,
     "expectedPullsPlain": 90.07226899883766,
