@@ -411,9 +411,12 @@ function runBlockRun(targets, { focus }, maxBlocks = 4) {
     const keep = new Map();
     let finished = 0;
     let finishedLetters = 0;
+    // 文字とのバランスのため、(人数-1)ブロックまでは揃っていても機械的に引き切る。
+    // 幸運な早抜け(例: 3PUで200連時点の完了)は趣旨に反するため認めない。
+    const mayStop = block >= targets - 1;
     for (const [key, cell] of states) {
       const [main, pu, spook] = key.split(':').map(Number);
-      if (main >= 1 && pu + spook >= others) { finished += cell.mass; finishedLetters += cell.letters; }
+      if (mayStop && main >= 1 && pu + spook >= others) { finished += cell.mass; finishedLetters += cell.letters; }
       else keep.set(key, cell);
     }
     blocks.push({
@@ -656,17 +659,12 @@ function pointBlock(result) {
 }
 
 
-const PU_CLOSING_SOURCE = {
-  2: '<p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。期待文字はどちらも300前後で、イブキが素体確保で十分な性能ならこれで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p>',
-  3: '<p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p>',
-  4: '<p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p><p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p>',
-};
 
 // 結論表の直下に置く説明。2PUは残業の重さを、3PU以上は表の読み方を示す。
 const CONCLUSION_NOTE = {
   2: '<p class="note">呼出ポイントは200連単位でしか降りられない。<b>約8割が200連で解放、残る2割は400連目開始という地獄の残業。</b></p>',
-  3: '<p class="note">呼出ポイントは200連単位でしか降りられないため、200連で終えた場合と残業を分けて表記。呼出チャージは区切りなし、平均のみ。</p>' + PU_CLOSING_SOURCE[3],
-  4: '<p class="note">呼出ポイントは200連単位でしか降りられないため、200連で終えた場合と残業を分けて表記。呼出チャージは区切りなし、平均のみ。</p>' + PU_CLOSING_SOURCE[4],
+  3: '<p class="note">文字とのバランスのため、途中で揃っても<b>400連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
+  4: '<p class="note">文字とのバランスのため、途中で揃っても<b>600連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
 };
 
 // 呼出チャージ節の表下に置く、狙い順の説明。
@@ -801,6 +799,15 @@ const ENGLISH_REPLACEMENTS = [
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
+  [
+    '<p class="note">文字とのバランスのため、途中で揃っても<b>400連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
+    '<p class="note">For the Eleph balance, the run goes <b>mechanically to 400 pulls</b> even if everyone lands earlier. A lucky early exit defeats the point and is not taken.</p>',
+  ],
+  [
+    '<p class="note">文字とのバランスのため、途中で揃っても<b>600連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
+    '<p class="note">For the Eleph balance, the run goes <b>mechanically to 600 pulls</b> even if everyone lands earlier. A lucky early exit defeats the point and is not taken.</p>',
+  ],
+
   ['<b>対・イロハ集中</b>｜', '<b>vs staying on Iroha</b> | '],
   ['<b>対・引けたら次へ</b>｜', '<b>vs moving on after each hit</b> | '],
 
@@ -809,9 +816,7 @@ const ENGLISH_REPLACEMENTS = [
   ['文字減少。</b>浮いた', ' Eleph.</b> Spend the freed '],
   ['連を期待値90連の200文字掘りに回すと', ' pulls on a 200-Eleph chase (expected 90 pulls) and they return about '],
   ['文字相当——差引+', ' Eleph — net +'],
-  ['文字相当——差引−', ' Eleph — net −'],
   ['文字で<b>呼出チャージ優位</b>。</p>', ' Eleph: <b>Recruitment Charge wins</b>.</p>'],
-  ['文字で<b>呼出ポイント優位</b>。</p>', ' Eleph: <b>Recruitment Points wins</b>.</p>'],
 
   ['<h3>呼出ポイント</h3>', '<h3>Recruitment Points</h3>'],
   [
@@ -850,10 +855,6 @@ const ENGLISH_REPLACEMENTS = [
   [
     '<p class="note">呼出ポイントは200連単位でしか降りられない。<b>約8割が200連で解放、残る2割は400連目開始という地獄の残業。</b></p>',
     '<p class="note">Recruitment Points only lets you leave on a 200-pull boundary. <b>About 80% are released at 200 pulls; the remaining 20% begin pull 401 — overtime from hell.</b></p>',
-  ],
-  [
-    '<p class="note">呼出ポイントは200連単位でしか降りられないため、200連で終えた場合と残業を分けて表記。呼出チャージは区切りなし、平均のみ。</p>',
-    '<p class="note">Recruitment Points can only exit on a 200-pull boundary, so finishing there and going into overtime are listed separately; Recruitment Charge has no boundary, so only its average is shown.</p>',
   ],
   ['<h3>呼出チャージ</h3>', '<h3>Recruitment Charge</h3>'],
   ['PU期待値</th>', 'PU expected</th>'],
@@ -970,22 +971,6 @@ const ENGLISH_REPLACEMENTS = [
   [
     '<li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li>',
     '<li><b>Not worth it</b> if there is nowhere left to spend Eleph. You are buying shards and 3★ students you will never build. The line is simply whether one student\'s worth of Eleph still has a use.</li>',
-  ],
-  [
-    '<p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p>',
-    '<p class="note">At three students the approaches split apart. Moving on after each hit raises the chance of stopping at 200 pulls to <b>50.6%</b> and costs 36,640 Pyroxene on average. Staying on Iroha halves that release rate to 25.7% and pushes the cost to 44,477 Pyroxene — but carries away <b>76 more Eleph</b>.</p>',
-  ],
-  [
-    '<p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p>',
-    '<p class="note">Put another way, it buys 76 Eleph for 7,837 Pyroxene. That is a fair trade if an attacker needs UE2 soon, but if the goal is to own everyone and carry Pyroxene into the next banner, switching as each student lands is cheaper. <b>Having that call to make at all belongs to Recruitment Points alone.</b></p>',
-  ],
-  [
-    '<p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p>',
-    '<p class="note">Going after all four, even switching as each one lands leaves you <b>only a 26.6% chance of stopping at 200 pulls</b>; six in ten run to 400 and better than one in ten to 600. Staying on Iroha drops that release rate to 6.6% and costs 58,633 Pyroxene on average — 13,886 more than switching.</p>',
-  ],
-  [
-    '<p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p>',
-    '<p class="note">At this scale the choice between focusing and switching matters less than the plain fact that <b>walking away early is barely an option</b>. Going after four featured students is a heavy commitment under either system.</p>',
   ],
   ['data-label="期待募集回数"', 'data-label="Expected pulls"'],
   ['data-label="獲得文字"', 'data-label="Eleph earned"'],
