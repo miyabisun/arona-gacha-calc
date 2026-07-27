@@ -225,64 +225,6 @@ function effectiveLetters(hits) {
 }
 
 /**
- * 1名を狙い続ける戦略と、未所持を順に埋める戦略の比較。
- * 対象は4名。ownedAtStart は募集開始時点で既に持っている人数。
- * focus=true は本命を指名し続け、他は交換とすり抜けに任せる。
- */
-function runFocusStrategy(ownedAtStart, { useCharge, useExchange, focus }, maxPulls = FOCUS_MAX_PULLS) {
-  let states = new Map([[`0:${ownedAtStart}:0`, 1]]);
-  const reachedUe2 = Array(maxPulls + 1).fill(0);
-  const otherOwned = Array(maxPulls + 1).fill(0);
-  const focusLetters = Array(maxPulls + 1).fill(0);
-
-  for (let pull = 1; pull <= maxPulls; pull += 1) {
-    const next = new Map();
-    const add = (key, mass) => next.set(key, (next.get(key) ?? 0) + mass);
-    for (const [key, mass] of states) {
-      const [hits, others, charge] = key.split(':').map(Number);
-      const othersLeft = (FOCUS_TARGETS - 1) - others;
-      // 集中なら常に本命。分散でも本命が未所持、または他に取る相手がいなければ本命を指名。
-      const namingFocus = focus || hits === 0 || othersLeft === 0;
-      const hit = useCharge ? chargeHitRate(charge) : NORMAL_PU_RATE;
-      const residual = useCharge ? chargeResidual(charge) : 1;
-      const free = namingFocus ? othersLeft : Math.max(0, othersLeft - 1);
-      const spook = residual * free * SPOOK_EACH_RATE;
-      const miss = 1 - hit - spook;
-      const nextCharge = useCharge ? charge + 1 : 0;
-
-      if (hit > 0) {
-        if (namingFocus) add(`${Math.min(hits + 1, FOCUS_HIT_CAP)}:${others}:0`, mass * hit);
-        else add(`${hits}:${Math.min(others + 1, FOCUS_TARGETS - 1)}:0`, mass * hit);
-      }
-      if (spook > 0) add(`${hits}:${Math.min(others + 1, FOCUS_TARGETS - 1)}:${nextCharge}`, mass * spook);
-      if (miss > 0) add(`${hits}:${others}:${nextCharge}`, mass * miss);
-    }
-    states = next;
-
-    if (useExchange && pull % EXCHANGE_INTERVAL === 0) {
-      const exchanged = new Map();
-      const add2 = (key, mass) => exchanged.set(key, (exchanged.get(key) ?? 0) + mass);
-      for (const [key, mass] of states) {
-        const [hits, others, charge] = key.split(':').map(Number);
-        // 交換は未所持を優先。全員そろっていれば本命へ回して文字を積む。
-        if (others < FOCUS_TARGETS - 1) add2(`${hits}:${others + 1}:${charge}`, mass);
-        else add2(`${Math.min(hits + 1, FOCUS_HIT_CAP)}:${others}:${charge}`, mass);
-      }
-      states = exchanged;
-    }
-
-    for (const [key, mass] of states) {
-      const [hits, others] = key.split(':').map(Number);
-      const letters = effectiveLetters(hits);
-      if (letters >= UE2_LETTERS) reachedUe2[pull] += mass;
-      otherOwned[pull] += mass * others;
-      focusLetters[pull] += mass * letters;
-    }
-  }
-  return { reachedUe2, otherOwned, focusLetters };
-}
-
-/**
  * 呼出チャージで「本命→相方の順に指名し、全員の素体がそろったら撤退する」運用。
  * allowSpook=false は、すり抜けが一切起きなかった場合の比較用。
  */
@@ -504,54 +446,6 @@ function calculateFestival() {
     scenarios[scenario.id] = byTarget;
   }
 
-  // チャージ99を次の募集へ持ち越したときの効果。1人目にしか効かないので1名分で測る。
-  const plainSingle = runFestivalDp(1, { useCharge: true, useExchange: false });
-  const bankedSingle = runFestivalDp(1, { useCharge: true, useExchange: false, initialCharge: BANK_PULLS });
-  const banking = {
-    bankPulls: BANK_PULLS,
-    expectedPullsPlain: expectedPulls(plainSingle.curves.allBonus),
-    expectedPullsBanked: expectedPulls(bankedSingle.curves.allBonus),
-    guaranteedWithinPlain: 200,
-    // チャージ99で始めるとk連目のチャージは98+k。199の確定枠へ届くのは101連目。
-    guaranteedWithinBanked: 200 - BANK_PULLS,
-    survivalToBank: (1 - NORMAL_PU_RATE) ** BANK_PULLS,
-    festivalStar3PerBank: FES_STAR3_RATE * BANK_PULLS,
-    limitedStar3PerBank: LIMITED_STAR3_RATE * BANK_PULLS,
-  };
-  banking.savedPulls = banking.expectedPullsPlain - banking.expectedPullsBanked;
-  // 仕込みに使った99連のうち、持ち越しで取り返せない分。ここが実質の持ち出し。
-  banking.carryPulls = BANK_PULLS - banking.savedPulls;
-  banking.carryStones = banking.carryPulls * PYROXENE_PER_PULL;
-  // PU以外の星3。平常時は2.3%、フェス限は指名PUとフェス限プールを除いた4.4%。
-  banking.otherStar3Normal = NORMAL_BANNER_STAR3_RATE - NORMAL_PU_RATE;
-  banking.otherStar3Festival = FES_STAR3_RATE - NORMAL_PU_RATE - SPOOK_TOTAL_RATE;
-  banking.extraStar3PerBank = (banking.otherStar3Festival - banking.otherStar3Normal) * BANK_PULLS;
-  // 限定募集は2名で1セット。1人目だけ持ち込んだチャージが効く。
-  banking.twoSetPlain = banking.expectedPullsPlain * 2;
-  banking.twoSetBanked = banking.expectedPullsBanked + banking.expectedPullsPlain;
-  banking.twoSetSaved = banking.twoSetPlain - banking.twoSetBanked;
-  // 持ち出した連数を、フェス限で引いた場合と限定で引いた場合で比べる。
-  banking.limitedOtherRate = LIMITED_STAR3_RATE - (NORMAL_PU_RATE * 2);
-  banking.haulFestival = banking.carryPulls * banking.otherStar3Festival;
-  banking.haulLimited = banking.carryPulls * banking.limitedOtherRate;
-  // 捨てた連数の機会費用。PUを狙っていれば重複100＋初回ボーナス100の200文字が目標だった。
-  banking.goalLetters = PU_DUPLICATE_LETTERS + BONUS_LETTERS;
-  banking.forgoneLetters = (banking.carryPulls / banking.expectedPullsPlain) * banking.goalLetters;
-  // 限定で引いても拾えた分を差し引いた、正味の上積み。
-  banking.netStar3 = banking.haulFestival - banking.haulLimited;
-
-  // 「本命1名を狙い続ける」意味を、開始時の素体0人/1人の2ケースで測る。
-  const focusPlans = [
-    { id: 'pointFocus', useCharge: false, useExchange: true, focus: true },
-    { id: 'pointSpread', useCharge: false, useExchange: true, focus: false },
-    { id: 'chargeFocus', useCharge: true, useExchange: false, focus: true },
-    { id: 'chargeSpread', useCharge: true, useExchange: false, focus: false },
-  ];
-  const focus = Object.fromEntries([0, 1].map((ownedAtStart) => [
-    ownedAtStart,
-    Object.fromEntries(focusPlans.map((plan) => [plan.id, runFocusStrategy(ownedAtStart, plan)])),
-  ]));
-
   // 呼出チャージで素体だけそろえて撤退する運用。すり抜けの得失を測る。
   const retreat = Object.fromEntries(TARGETS.map((target) => [target, {
     withSpook: runRetreat(target, { allowSpook: true }),
@@ -562,15 +456,13 @@ function calculateFestival() {
   const exchangePlans = [
     { id: 'subThenMain', plan: ['sub', 'main'] },
     { id: 'subThenVeteran', plan: ['sub', 'veteran'] },
-    { id: 'bothVeteran', plan: ['veteran', 'veteran'] },
-    { id: 'bothMain', plan: ['main', 'main'] },
   ];
   const focusExchange = Object.fromEntries([200, 400].map((limit) => [
     limit,
     Object.fromEntries(exchangePlans.map(({ id, plan }) => [id, runFocusExchange(limit, plan)])),
   ]));
 
-  // そろったら止める前提での、呼出ポイント2PUの現実的な進め方。
+  // そろったら止める前提での、200連ブロック単位の進め方。
   const blockRun = Object.fromEntries([2, 3, 4].map((targets) => [targets, {
     focus: runBlockRun(targets, { focus: true }),
     sequential: runBlockRun(targets, { focus: false }),
@@ -599,13 +491,80 @@ function calculateFestival() {
       perBlockNormal: perBlock(normal),
       perBlockFestival: perBlock(festival),
       blockGain: perBlock(festival) - perBlock(normal),
-      // 安い交換段はとっくに使い切っている前提なので、末尾レートで換算する。
       blockGainLetters: Math.round((perBlock(festival) - perBlock(normal)) * USEFUL_SHARD_RATIO / SHARD_TAIL_RATE),
       usefulRatio: USEFUL_SHARD_RATIO,
       bankGain: (festival - normal) * BANK_PULLS,
       bankGainLetters: Math.round((festival - normal) * BANK_PULLS * USEFUL_SHARD_RATIO / SHARD_TAIL_RATE),
     };
   })();
+
+  // チャージ99を次の募集へ持ち越す仕込みの台帳。
+  // 指名生徒を引くとカウンタは0に戻るが、その後の外れ分はまた積み上がる。
+  // よって99連を回しても「カウンタ0で終わる」わけではない。
+  const banking = (() => {
+    const q = 1 - NORMAL_PU_RATE;
+    // カウンタcから指名生徒を1体確保するまでの期待連数(100連目50%、200連目確定)。
+    const expected = (charge) => (1 - q ** (100 - charge)) / NORMAL_PU_RATE
+      + 0.5 * q ** (99 - charge) * (1 - q ** 100) / NORMAL_PU_RATE;
+    const fromZero = expected(0);
+    const fromBank = expected(BANK_PULLS);
+
+    // 99連終了時のカウンタKは「末尾の外れ連続長」。K=t は 99-t 連目がヒットし以降t連が全外れ。
+    let expectedSaving = 0;
+    let expectedCharge = 0;
+    for (let tail = 0; tail <= BANK_PULLS - 1; tail += 1) {
+      const mass = NORMAL_PU_RATE * (q ** tail);
+      expectedSaving += mass * (fromZero - expected(tail));
+      expectedCharge += mass * tail;
+    }
+    const survival = q ** BANK_PULLS;          // 一度も引かずカウンタ99で終わる確率
+    expectedSaving += survival * (fromZero - fromBank);
+    expectedCharge += survival * BANK_PULLS;
+
+    // 指名生徒が出た時点で止める運用。天井前なので純コストは (1-q^99)*E(0) に一致する。
+    const stopOnHitCost = (1 - survival) * fromZero;
+    const hits = NORMAL_PU_RATE * BANK_PULLS;  // 99連での期待獲得数
+    const letters = (PU_DUPLICATE_LETTERS + BONUS_LETTERS) * (1 - survival)
+      + PU_DUPLICATE_LETTERS * (hits - (1 - survival));
+    const poolHits = SPOOK_TOTAL_RATE * BANK_PULLS;
+    const otherStar3Festival = FES_STAR3_RATE - NORMAL_PU_RATE - SPOOK_TOTAL_RATE;
+    const limitedOtherRate = LIMITED_STAR3_RATE - (NORMAL_PU_RATE * 2);
+    const carryPulls = BANK_PULLS - expectedSaving;
+
+    return {
+      bankPulls: BANK_PULLS,
+      expectedPullsPlain: fromZero,
+      expectedPullsBanked: fromBank,
+      savedPulls: fromZero - fromBank,
+      expectedSaving,
+      expectedCharge,
+      survivalToBank: survival,
+      hitChance: 1 - survival,
+      carryPulls,
+      stopOnHitCost,
+      expectedHits: hits,
+      lettersFromNamed: letters,
+      poolHits,
+      lettersFromPool: poolHits * SPOOK_DUPLICATE_LETTERS,
+      shardsFromPool: poolHits * DUPLICATE_SHARDS,
+      otherStar3Festival,
+      limitedOtherRate,
+      star3Gained: otherStar3Festival * BANK_PULLS,
+      star3Forgone: limitedOtherRate * expectedSaving,
+      guaranteedWithinBanked: 200 - BANK_PULLS,
+    };
+  })();
+  // 暴発した側だけの条件付き平均短縮。全体から非暴発枝を引いて求める。
+  banking.savingWhenHit = (banking.expectedSaving - banking.survivalToBank * banking.savedPulls)
+    / banking.hitChance;
+  // 支出を文字へ直すレート。指名を追う効率そのもの。
+  banking.lettersPerPull = (PU_DUPLICATE_LETTERS + BONUS_LETTERS) / banking.expectedPullsPlain;
+  banking.costLetters = banking.carryPulls * banking.lettersPerPull;
+  banking.star3Net = banking.star3Gained - banking.star3Forgone;
+  banking.lettersTotal = banking.lettersFromNamed + banking.lettersFromPool;
+  banking.twoSetPlain = banking.expectedPullsPlain * 2;
+  banking.twoSetBanked = banking.expectedPullsBanked + banking.expectedPullsPlain;
+  banking.twoSetSaved = banking.twoSetPlain - banking.twoSetBanked;
 
   const result = {
     metadata: {
@@ -635,7 +594,6 @@ function calculateFestival() {
       otherStar3Unused: '恒常星3の4.4%は内訳として記録するだけで計算には使わない。',
     },
     scenarios,
-    focus,
     retreat,
     focusExchange,
     blockRun,
@@ -673,7 +631,7 @@ function retreatSection(result) {
     const savedPulls = without.expectedPulls - withSpook.expectedPulls;
     const lostLetters = without.letters - withSpook.letters;
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}素体がそろった時点で撤退する前提です。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>すべて指名で引く</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜けを含む実際</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜けで決着した割合</th><td colspan="2" data-label="すり抜けで決着">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。</p><p class="note">相方が素体確保で十分な性能なら、これは早く終わって得をした話です。相方にも固有2が要るなら、撤退せず指名を続けることになります。そのときは先に素体を持っているぶん、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になり、取り逃した100文字はそこで戻ります。</p></div>`;
-  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。限定募集は2名で1セットなので、その2名をそろえるまでで比べます。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>2名そろえるまで</th><th>期待募集回数</th><th>必要な石</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待募集回数">${result.banking.twoSetPlain.toFixed(1)}連</td><td data-label="必要な石">${stone(result.banking.twoSetPlain)}石</td></tr><tr><th>チャージ99から</th><td data-label="期待募集回数" class="best">${result.banking.twoSetBanked.toFixed(1)}連</td><td data-label="必要な石" class="best">${stone(result.banking.twoSetBanked)}石</td></tr><tr><th>差</th><td data-label="期待募集回数">−${result.banking.twoSetSaved.toFixed(1)}連</td><td data-label="必要な石">−${stone(result.banking.twoSetSaved)}石</td></tr></tbody></table><p><b>純粋に${result.banking.twoSetSaved.toFixed(0)}連分、安くなります。</b></p><h3>その代わり99連を先に引く</h3><p>短縮された${result.banking.twoSetSaved.toFixed(0)}連を差し引くと、取り返せない持ち出しは <b>${result.banking.carryPulls.toFixed(0)}連</b>（${stone(result.banking.carryPulls)}石）です。この${result.banking.carryPulls.toFixed(0)}連を溝に捨てる代わりに、<b>星3生徒がランダムで${result.banking.haulFestival.toFixed(2)}名</b>お迎えできます。</p><h3>それは損か得か</h3><p>捨てた${result.banking.carryPulls.toFixed(0)}連は、PUを狙っていれば<b>${result.banking.goalLetters}文字</b>（重複100＋初回ボーナス100）というゴールへ向かっていた分です。期待${result.banking.expectedPullsPlain.toFixed(0)}連でそこへ届くので、${result.banking.carryPulls.toFixed(0)}連はゴールの半分強にあたります。いっぽう受け取る星3は、同じ${result.banking.carryPulls.toFixed(0)}連を限定募集で引いても拾えた分を差し引いて数えます。</p><p class="formula">捨てる： ${result.banking.carryPulls.toFixed(0)}連 ÷ ${result.banking.expectedPullsPlain.toFixed(1)}連 × ${result.banking.goalLetters}文字 = <b>${result.banking.forgoneLetters.toFixed(0)}文字</b><br>受け取る： ${result.banking.carryPulls.toFixed(0)}連 × （${pct(result.banking.otherStar3Festival)} − ${pct(result.banking.limitedOtherRate)}） = <b>${result.banking.netStar3.toFixed(2)}名</b>の闇鍋</p><p class="note">確実な${result.banking.forgoneLetters.toFixed(0)}文字を手放して、育てるかどうかも分からない星3が${result.banking.netStar3.toFixed(2)}名。<b>明らかに損なので、この仕込みは勧められません。</b>そのうえ貯めている途中で指名した生徒を引き当てればチャージは0に戻り、99連を引ききってもチャージが残るのは <b>${pct(result.banking.survivalToBank)}</b> です。</p></div>`;
+  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。ここで指名するのは<b>すでに素体を持っていて初回PUボーナスが未受領の生徒</b>（制服ネルなど）です。引き当てれば重複100文字と初回ボーナス100文字で200文字が入ります。</p><h3>まず、カウンタは無駄になりません</h3><p>99連のあいだに指名生徒が出るとカウンタは0へ戻りますが、<b>そこから先の外れはまた積み上がります</b>。99連を回しきった時点で手元に残るカウンタの期待値は${result.banking.expectedCharge.toFixed(0)}で、次の募集に持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>です。暴発したら全部台無し、にはなりません。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>99連から短縮分を差し引いた持ち出しは <b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名を追う効率が1連あたり${result.banking.lettersPerPull.toFixed(2)}文字なので、文字に直すと<b>${result.banking.costLetters.toFixed(0)}文字</b>ぶんの支出です。受け取るほうを並べます。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで釣り合いを超えており、星3と欠片はまるごと上乗せです。<b>指名生徒の文字をまだ取り切りたい先生には、この仕込みは得になります。</b></p><h3>ただし、出たら必ず止めること</h3><p class="note">指名生徒が出たあとも99連まで回し続けると、その継続分の効率は1連あたり約1.1文字まで落ちます。<b>出た時点で止めれば</b>、持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連ちょうど、つまり指名を素で追うのと同じ効率に収まります。</p><h3>向いている先生・向いていない先生</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素で追うのと同じ石効率のまま、フェス限のすり抜けが丸ごと上乗せされます。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連ぶん返ってきます。</li><li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li></ul></div>`;
   return `<section class="panel"><h2>新仕様は全員そろえるまで降りられない</h2><p>呼出チャージには交換がないので、狙った生徒は順番に指名して引き当てるしかありません。まず素体をそろえるまでの期待値を置き、そこにすり抜けが挟まると何が変わるかを見ます。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
@@ -904,8 +862,6 @@ const ENGLISH_REPLACEMENTS = [
   ['data-label="差"', 'data-label="Gap"'],
   ['data-label="平常時"', 'data-label="Normal"'],
   ['data-label="フェス限期間"', 'data-label="Festival"'],
-  ['<th>チャージ0から</th>', '<th>From charge 0</th>'],
-  ['<th>チャージ99から</th>', '<th>From charge 99</th>'],
 
   ['<th>交換枠の流し先</th>', '<th>Where the exchanges go</th>'],
   ['<th>イブキ確保</th>', '<th>Ibuki owned</th>'],
@@ -950,40 +906,68 @@ const ENGLISH_REPLACEMENTS = [
   ['欠片（文字に直して約', ' shards (about '],
   ['文字）</td>', ' Eleph)</td>'],
   ['data-pu="bank">99連</button>', 'data-pu="bank">Banking</button>'],
-  [
-    '<p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。限定募集は2名で1セットなので、その2名をそろえるまでで比べます。</p>',
-    '<p>Recruitment Charge carries over within a banner category. Stop at 99 pulls on the festival banner and <b>the next limited banner opens at charge 99</b>. Limited banners come two students at a time, so the comparison runs until both are owned.</p>',
-  ],
-  ['<th>2名そろえるまで</th>', '<th>To own both</th>'],
-  ['<th>必要な石</th>', '<th>Pyroxene needed</th>'],
-  ['data-label="必要な石"', 'data-label="Pyroxene needed"'],
-  ['<p><b>純粋に', '<p><b>That is a straight saving of '],
-  ['連分、安くなります。</b></p>', ' pulls.</b></p>'],
-  ['<h3>その代わり99連を先に引く</h3>', '<h3>The 99 pulls you spend first</h3>'],
-  ['<p>短縮された', '<p>Netting out the '],
-  ['連を差し引くと、取り返せない持ち出しは <b>', ' pulls you save, the outlay you never recover is <b>'],
   ['連</b>（', ' pulls</b> ('],
-  ['石）です。この', ' Pyroxene). Throw those '],
-  ['連を溝に捨てる代わりに、<b>星3生徒がランダムで', ' pulls away and what comes back is <b>'],
-  ['名</b>お迎えできます。</p>', ' random 3★ students</b>.</p>'],
-  ['<h3>それは損か得か</h3>', '<h3>Does it pay off?</h3>'],
   [
-    '<p>捨てた46連は、PUを狙っていれば<b>200文字</b>（重複100＋初回ボーナス100）というゴールへ向かっていた分です。期待90連でそこへ届くので、46連はゴールの半分強にあたります。いっぽう受け取る星3は、同じ46連を限定募集で引いても拾えた分を差し引いて数えます。</p>',
-    '<p>Those 46 discarded pulls were otherwise heading toward <b>200 Eleph</b> — 100 for the duplicate plus the 100 first-time bonus. That goal arrives in about 90 pulls, so 46 covers a little over half the distance. The 3★ students received are counted net of what the same 46 pulls would have turned up on a limited banner anyway.</p>',
+    '<p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。ここで指名するのは<b>すでに素体を持っていて初回PUボーナスが未受領の生徒</b>（制服ネルなど）です。引き当てれば重複100文字と初回ボーナス100文字で200文字が入ります。</p>',
+    '<p>Recruitment Charge carries over within a banner category, so stopping at 99 pulls on the festival banner means <b>the next limited banner opens at charge 99</b>. The student you select here is <b>one you already own whose first-time bonus is still unspent</b> — Uniform Nel, for instance. Hitting her pays 100 Eleph for the duplicate plus the 100 Eleph bonus: 200 in one go.</p>',
   ],
-  ['<p class="formula">捨てる： ', '<p class="formula">Given up: '],
-  ['連 ÷ ', ' pulls / '],
-  ['連 × 200文字 = <b>', ' pulls x 200 Eleph = <b>'],
-  ['文字</b><br>受け取る： ', ' Eleph</b><br>Received: '],
-  ['連 × （', ' pulls x ('],
-  [' − ', ' - '],
-  ['） = <b>', ') = <b>'],
-  ['名</b>の闇鍋</p>', ' students</b>, sight unseen</p>'],
-  ['<p class="note">確実な', '<p class="note">Trading a certain '],
-  ['文字を手放して、育てるかどうかも分からない星3が', ' Eleph for 3★ students you may never build, all '],
-  ['名。<b>明らかに損なので、この仕込みは勧められません。</b>そのうえ貯めている途中で指名した生徒を引き当てればチャージは0に戻り、99連を引ききってもチャージが残るのは <b>',
-   ' of them. <b>That is plainly a losing trade, so this plan is not recommended.</b> On top of that, pulling the student you selected resets the charge to 0, and the chance of still holding it after 99 pulls is only <b>'],
-  ['</b> です。</p>', '</b>.</p>'],
+  ['<h3>まず、カウンタは無駄になりません</h3>', '<h3>The counter is never wasted</h3>'],
+  [
+    '<p>99連のあいだに指名生徒が出るとカウンタは0へ戻りますが、<b>そこから先の外れはまた積み上がります</b>。99連を回しきった時点で手元に残るカウンタの期待値は',
+    '<p>Hitting the selected student inside those 99 pulls resets the counter to 0, but <b>every miss after that starts stacking again</b>. The counter left in hand once 99 pulls are done averages ',
+  ],
+  ['で、次の募集に持ち込める短縮は平均<b>', ', and the shortening carried into the next banner averages <b>'],
+  ['連</b>です。暴発したら全部台無し、にはなりません。</p>', ' pulls</b>. An early hit does not throw the plan away.</p>'],
+  ['<th>99連を回した結果</th>', '<th>After 99 pulls</th>'],
+  ['<th>確率</th>', '<th>Chance</th>'],
+  ['<th>次の募集での短縮</th>', '<th>Shortening carried</th>'],
+  ['<th>一度も出ずカウンタ99</th>', '<th>No hit, counter at 99</th>'],
+  ['<th>途中で出た（カウンタは積み直し）</th>', '<th>Hit along the way (counter rebuilt)</th>'],
+  ['<th>ならして</th>', '<th>Overall</th>'],
+  ['data-label="確率"', 'data-label="Chance"'],
+  ['data-label="次の募集での短縮"', 'data-label="Shortening carried"'],
+  ['">平均', '">avg '],
+  ['<h3>収支</h3>', '<h3>The ledger</h3>'],
+  ['<p>99連から短縮分を差し引いた持ち出しは <b>', '<p>Netting the shortening out of 99 pulls leaves an outlay of <b>'],
+  ['石）。指名を追う効率が1連あたり', ' Pyroxene). Chasing the selected student runs at '],
+  ['文字なので、文字に直すと<b>', ' Eleph per pull, so in Eleph that is <b>'],
+  ['文字</b>ぶんの支出です。受け取るほうを並べます。</p>', ' Eleph</b> spent. Here is what comes back.</p>'],
+  ['<th>受け取るもの</th>', '<th>Received</th>'],
+  ['<th>期待</th>', '<th>Expected</th>'],
+  ['<th>文字換算</th>', '<th>In Eleph</th>'],
+  ['<th>指名生徒（初回ボーナス込み）</th>', '<th>Selected student (bonus included)</th>'],
+  ['<th>フェス限9名プール</th>', '<th>The nine-student festival pool</th>'],
+  ['<th>恒常星3（限定で引いた場合との差）</th>', '<th>Permanent 3★ (net of the limited banner)</th>'],
+  ['<th>合計</th>', '<th>Total</th>'],
+  ['data-label="期待"', 'data-label="Expected"'],
+  ['data-label="文字換算"', 'data-label="In Eleph"'],
+  ['体</td>', '</td>'],
+  ['件</td>', '</td>'],
+  ['文字＋欠片', ' Eleph + '],
+  ['<p class="formula">支出 ', '<p class="formula">Spent '],
+  ['文字 ＜ 受け取り ', ' Eleph < received '],
+  ['文字 ＋ 星3 ', ' Eleph + '],
+  ['体 ＋ 欠片 ', ' 3★ + '],
+  [
+    '<p class="note">文字だけで釣り合いを超えており、星3と欠片はまるごと上乗せです。<b>指名生徒の文字をまだ取り切りたい先生には、この仕込みは得になります。</b></p>',
+    '<p class="note">Eleph alone already clears the bar, with the 3★ students and shards stacked on top. <b>For anyone still collecting Eleph on the selected student, this plan pays.</b></p>',
+  ],
+  ['<h3>ただし、出たら必ず止めること</h3>', '<h3>But stop the moment she arrives</h3>'],
+  [
+    '<p class="note">指名生徒が出たあとも99連まで回し続けると、その継続分の効率は1連あたり約1.1文字まで落ちます。<b>出た時点で止めれば</b>、持ち出しは',
+    '<p class="note">Carrying on to 99 pulls after the hit drops the efficiency of those extra pulls to about 1.1 Eleph each. <b>Stop when she lands</b> and the outlay settles at exactly ',
+  ],
+  ['連ちょうど、つまり指名を素で追うのと同じ効率に収まります。</p>', ' pulls — the same efficiency as chasing her outright.</p>'],
+  ['<h3>向いている先生・向いていない先生</h3>', '<h3>Who this suits</h3>'],
+  [
+    '<li><b>得</b>：指名生徒の文字を取り切りたい先生。素で追うのと同じ石効率のまま、フェス限のすり抜けが丸ごと上乗せされます。外しても次の限定で平均',
+    '<li><b>Worth it</b> if you still want Eleph on the selected student. The Pyroxene efficiency matches chasing her outright, with festival off-target pulls added on top. Even a miss returns an average of ',
+  ],
+  ['連ぶん返ってきます。</li>', ' pulls on the next limited banner.</li>'],
+  [
+    '<li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li>',
+    '<li><b>Not worth it</b> if there is nowhere left to spend Eleph. You are buying shards and 3★ students you will never build. The line is simply whether one student\'s worth of Eleph still has a use.</li>',
+  ],
   ['<h2>実際にはどこで降りるのか</h2>', '<h2>Where the run actually ends</h2>'],
   [
     '<p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p>',
@@ -1089,7 +1073,6 @@ function thinForJson(result, step = 10) {
     ...result,
     metadata: { ...result.metadata, curveSampleStep: step },
     scenarios: thinGroup(result.scenarios),
-    focus: thinGroup(result.focus),
   };
 }
 
