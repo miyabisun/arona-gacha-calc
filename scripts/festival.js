@@ -594,7 +594,9 @@ function calculateFestival() {
   // 補填込みの掘り効率。星3の欠片ぶんを上乗せする(ボーナス未取得のフェス限が残る先生は更に得だが、
   // できない先生もいるため新仕様不利側=この保守値を採用)。
   banking.chaseRate = banking.lettersPerPull + NORMAL_BYPRODUCT_PER_PULL;
-  banking.costLetters = banking.carryPulls * banking.chaseRate;
+  // 掘り先をフェス限期間に置けるなら、欠片補填も16文字/10連になる。
+  banking.chaseRateFes = banking.lettersPerPull + FES_BYPRODUCT_PER_PULL;
+  banking.costLetters = banking.carryPulls * banking.chaseRateFes;
   banking.star3Net = banking.star3Gained - banking.star3Forgone;
   // フェス限の欠片は10連=80欠片ルールで一括計上(星3重複の50欠片等を含むどんぶり値)。
   banking.fesShards = BANK_PULLS * (SHARDS_PER_TEN_FESTIVAL / 10);
@@ -700,7 +702,7 @@ function retreatSection(result) {
 <h3>呼出チャージ</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>獲得文字</th></tr></thead><tbody><tr><th>${target}PU期待値</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="獲得文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜け込</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="獲得文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="獲得文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜け率</th><td colspan="2" data-label="すり抜け率">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
 
 ${target === 2 ? pointBlock(result) : ''}</div>`;
-  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集種別ごとに引き継ぎ。フェス限で99連止めしておけば、<b>次の限定をチャージ99で開始できる</b>。指名は<b>素体所持・初回ボーナス未受領の生徒</b>（制服ネル等）。引ければ重複100＋ボーナス100の200文字。</p><h3>カウンタは無駄にならない</h3><p>途中で出てもカウンタは<b>積み直し</b>。99連完走時の残カウンタ期待値は${result.banking.expectedCharge.toFixed(0)}、持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>。暴発で台無しにはならない。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>持ち出しは99連−短縮分の<b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。掘り効率（補填込み）${result.banking.chaseRate.toFixed(2)}文字/連で換算して<b>${result.banking.costLetters.toFixed(0)}文字</b>の支出。対する受け取りは以下。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>欠片一括（フェス80欠片/10連）</th><td data-label="期待">${result.banking.fesShards.toFixed(0)}欠片</td><td data-label="文字換算">${result.banking.lettersFromFesShards.toFixed(0)}文字</td></tr><tr><th>フェス限9名プールの文字</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字</td></tr><tr><th>恒常星3（参考・欠片は一括に含む）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字</p><p class="note">文字だけで支出を超過。星3と欠片は丸ごと上乗せ。<b>指名生徒の文字を取り切りたい先生には得。</b></p><p class="note">同じ99連ならフェス限期間のほうが欠片約${result.shardYield.bankGain}枚多い。凸に回せる分に割り引けば${result.shardYield.bankGainLetters}文字程度、判断には影響なし。</p><h3>出たら即止め</h3><p class="note">出た後も99連まで回すと効率は約1.1文字/連に半減。<b>出た時点で止めれば</b>持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連、素追いと同効率。</p><h3>向き・不向き</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素追いと同じ石効率にフェス限すり抜けが上乗せ。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連分返ってくる。</li><li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li></ul></div>`;
+  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集種別ごとに引き継ぎ。フェス限で99連止めしておけば、<b>次の限定をチャージ99で開始できる</b>。指名は<b>素体所持・初回ボーナス未受領の生徒</b>（制服ネル等）。引ければ重複100＋ボーナス100の200文字。</p><h3>カウンタは無駄にならない</h3><p>途中で出てもカウンタは<b>積み直し</b>。99連完走時の残カウンタ期待値は${result.banking.expectedCharge.toFixed(0)}、持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>。暴発で台無しにはならない。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>持ち出しは99連−短縮分の<b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。フェス限掘り（補填込み）${result.banking.chaseRateFes.toFixed(2)}文字/連で換算して<b>${result.banking.costLetters.toFixed(0)}文字</b>の支出。対する受け取りは以下。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>欠片一括（フェス80欠片/10連）</th><td data-label="期待">${result.banking.fesShards.toFixed(0)}欠片</td><td data-label="文字換算">${result.banking.lettersFromFesShards.toFixed(0)}文字</td></tr><tr><th>フェス限9名プールの文字</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字</td></tr><tr><th>恒常星3（参考・欠片は一括に含む）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字</p><p class="note">文字だけで支出を超過。星3と欠片は丸ごと上乗せ。<b>指名生徒の文字を取り切りたい先生には得。</b></p><p class="note">同じ99連ならフェス限期間のほうが欠片約${result.shardYield.bankGain}枚多い。凸に回せる分に割り引けば${result.shardYield.bankGainLetters}文字程度、判断には影響なし。</p><h3>出たら即止め</h3><p class="note">出た後も99連まで回すと効率は約1.1文字/連に半減。<b>出た時点で止めれば</b>持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連、素追いと同効率。</p><h3>向き・不向き</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素追いと同じ石効率にフェス限すり抜けが上乗せ。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連分返ってくる。</li><li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li></ul></div>`;
   return `<section class="panel"><h2>狙う人数で選ぶ</h2><p>結論は狙う人数で変わる。該当するタブに、費用から降りどきまでを集約。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
@@ -717,19 +719,19 @@ function summarySection(result) {
   const f3 = result.blockRun[3].focus;
   const s3 = result.blockRun[3].sequential;
   const marginal = (f3.letters - s3.letters) / (f3.pulls - s3.pulls);
-  return `<section class="panel"><h2>まとめ</h2><p class="verdict"><b>結論：あまり気にしないで大丈夫。</b></p><p class="note">補填まで数えると<b>全構成で旧仕様が僅かに優位（差引−3〜−48文字）</b>。ただし固有1段の120文字にも届かない差で、1バナーあたりの実害は軽微。</p><p class="note">長年の最適解「一人の生徒連打」も、追加1連の実入りは補填込み<b>${(marginal + 1.6).toFixed(2)}文字</b>——掘りの基準<b>${result.banking.chaseRate.toFixed(2)}文字/連</b>と僅差。信仰するほどの優位も、失って泣くほどの損も無かった。</p></section>`;
+  return `<section class="panel"><h2>まとめ</h2><p class="verdict"><b>結論：文字目的の90連が残っているか否かで、天地が分かれる。</b></p><p class="note"><b>残っている先生（ボーナス未取得のフェス限を次のフェス期に掘れる）</b>：浮いた石を${result.banking.chaseRateFes.toFixed(2)}文字/連で取り返せるため、ほぼ全構成で<b>新仕様優位</b>（+12〜+145文字。4PU早抜けのみ−16）。</p><p class="note"><b>残っていない先生（文字の受け皿なし）</b>：石を文字へ戻す手段が無く、獲得文字の差がそのまま残って<b>全構成で旧仕様優位</b>。連打で積んだ百文字級の差は返ってこない。</p><p class="note">長年の最適解「一人の生徒連打」の追加1連は補填込み${(marginal + 1.6).toFixed(2)}文字——掘りの基準${result.banking.chaseRateFes.toFixed(2)}文字/連を下回る。どちらの世界でも、連打そのものは信仰するほどの打ち方ではなかった。</p></section>`;
 
 }
 
 function verdictLines(result, target, withSpook) {
-  const rate = result.banking.chaseRate;
+  const rate = result.banking.chaseRateFes;
   const line = (plan, label) => {
     const saved = plan.pulls - withSpook.expectedPulls;
     // 旧仕様側は追加で引いたぶんフェス限の欠片(16文字/10連)も拾っている。
     const lost = (plan.letters - withSpook.letters) + saved * FES_BYPRODUCT_PER_PULL;
     const recovered = saved * rate;
     const net = recovered - lost;
-    return `<p class="verdict">${label}<b>呼出チャージは${stone(saved)}石安くなる代わりに${Math.round(lost)}文字減少（フェス欠片${Math.round(saved * FES_BYPRODUCT_PER_PULL)}文字分込み）。</b>浮いた${saved.toFixed(1)}連を文字掘り（補填込み${rate.toFixed(2)}文字/連）に回すと${Math.round(recovered)}文字相当——差引${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net))}文字で<b>${net >= 0 ? '呼出チャージ' : '呼出ポイント'}優位</b>。</p>`;
+    return `<p class="verdict">${label}<b>呼出チャージは${stone(saved)}石安くなる代わりに${Math.round(lost)}文字減少（フェス欠片${Math.round(saved * FES_BYPRODUCT_PER_PULL)}文字分込み）。</b>浮いた${saved.toFixed(1)}連をフェス限の文字掘り（補填込み${rate.toFixed(2)}文字/連）に回すと${Math.round(recovered)}文字相当——差引${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net))}文字で<b>${net >= 0 ? '呼出チャージ' : '呼出ポイント'}優位</b>。</p>`;
   };
   if (target === 2) return line(result.blockRun[2].focus, '');
   return line(result.blockRun[target].focus, '<b>対・イロハ集中</b>｜')
@@ -771,7 +773,7 @@ function renderFestivalHtml(result) {
   const rates = result.rates;
   const banking = result.banking;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5.5フェス限の新旧比較</title><link rel="stylesheet" href="css/festival.css"></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5フェス限の新旧比較</h1>${GITHUB_LINK}</div><p class="lead">フェス限すり抜け確率が高いため、通常の募集と比べて変数が多い。5.5周年のフェス限ガチャの新旧比較検証を机上で行う。</p></header>
-<section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率 <b>${pct(rates.festivalStar3)}</b>。</li><li>指名1名の排出率 <b>${pct(rates.namedPu)}</b>。呼出チャージはチャージ99で50%、199で100%。</li><li>新旧フェス限10名−指名中1名の<b>9名</b>で <b>${pct(rates.spookPoolTotal)}</b> を等分、1名 <b>${pct(rates.spookEach)}</b>。</li><li>残り <b>${pct(rates.otherStar3)}</b> は恒常星3。内訳の記録のみ、計算には不使用。</li><li>初回PUボーナスは<b>指名PU自引きと呼出ポイント交換</b>のみ。すり抜けでは付かない。</li><li>素体なしを優先指名。全員素体済みなら素体持ちを指名してボーナス回収。</li><li>文字と欠片は別勘定。欠片は在庫潤沢な先生が多く、同じ重みでは扱えない。</li><li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li><li>文字掘り（期待90連・200文字）の補填は10連価値ルールで行う。平常時+1.0文字/連（計3.22文字/連）、比較対象のフェス限側の募集にも16文字/10連を同様に計上。ボーナス未取得のフェス限が残る先生は掘りが更に得だが、できない先生もいるため保守値を採用。</li></ul></details></section>
+<section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率 <b>${pct(rates.festivalStar3)}</b>。</li><li>指名1名の排出率 <b>${pct(rates.namedPu)}</b>。呼出チャージはチャージ99で50%、199で100%。</li><li>新旧フェス限10名−指名中1名の<b>9名</b>で <b>${pct(rates.spookPoolTotal)}</b> を等分、1名 <b>${pct(rates.spookEach)}</b>。</li><li>残り <b>${pct(rates.otherStar3)}</b> は恒常星3。内訳の記録のみ、計算には不使用。</li><li>初回PUボーナスは<b>指名PU自引きと呼出ポイント交換</b>のみ。すり抜けでは付かない。</li><li>素体なしを優先指名。全員素体済みなら素体持ちを指名してボーナス回収。</li><li>文字と欠片は別勘定。欠片は在庫潤沢な先生が多く、同じ重みでは扱えない。</li><li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li><li>文字掘り（期待90連・200文字）の補填は10連価値ルールで行う。掘り先はフェス限期間にも置けるものとし+1.6文字/連（計3.82文字/連）。比較対象のフェス限側の募集にも16文字/10連を同様に計上。掘り先＝ボーナス未取得のフェス限（固有3以下の制服ネル等）が残っていることが前提。</li></ul></details></section>
 ${retreatSection(result)}
 ${summarySection(result)}
 <footer>Generated by scripts/festival.js</footer></main>
@@ -820,6 +822,40 @@ const ENGLISH_REPLACEMENTS = [
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
+  [
+    '<p class="verdict"><b>結論：文字目的の90連が残っているか否かで、天地が分かれる。</b></p>',
+    '<p class="verdict"><b>Verdict: heaven or earth depends on whether you still have a 90-pull Eleph chase left.</b></p>',
+  ],
+  [
+    '<p class="note"><b>残っている先生（ボーナス未取得のフェス限を次のフェス期に掘れる）</b>：浮いた石を',
+    '<p class="note"><b>If you do</b> (a bonus-unclaimed festival student to dig next festival): the freed Pyroxene converts back at ',
+  ],
+  [
+    '文字/連で取り返せるため、ほぼ全構成で<b>新仕様優位</b>（+12〜+145文字。4PU早抜けのみ−16）。</p>',
+    ' Eleph per pull, and <b>the new system leads in nearly every configuration</b> (+12 to +145 Eleph; only the 4PU early exit stays at −16).</p>',
+  ],
+  [
+    '<p class="note"><b>残っていない先生（文字の受け皿なし）</b>：石を文字へ戻す手段が無く、獲得文字の差がそのまま残って<b>全構成で旧仕様優位</b>。連打で積んだ百文字級の差は返ってこない。</p>',
+    '<p class="note"><b>If you do not</b> (nowhere left to spend Eleph): the stones cannot be turned back into Eleph, the earned-Eleph gap stands, and <b>the old system leads in every configuration</b>. The hundreds of Eleph the hammering piled up never come back.</p>',
+  ],
+  [
+    '<p class="note">長年の最適解「一人の生徒連打」の追加1連は補填込み',
+    '<p class="note">The long-trusted optimum of hammering one student earns a topped-up ',
+  ],
+  [
+    '文字——掘りの基準',
+    ' Eleph per extra pull against the ',
+  ],
+  [
+    '文字/連を下回る。どちらの世界でも、連打そのものは信仰するほどの打ち方ではなかった。</p>',
+    ' Eleph-per-pull benchmark — short of it in either world. The hammering itself was never worth the faith.</p>',
+  ],
+  [
+    '<li>文字掘り（期待90連・200文字）の補填は10連価値ルールで行う。掘り先はフェス限期間にも置けるものとし+1.6文字/連（計3.82文字/連）。比較対象のフェス限側の募集にも16文字/10連を同様に計上。掘り先＝ボーナス未取得のフェス限（固有3以下の制服ネル等）が残っていることが前提。</li>',
+    '<li>The Eleph-chase top-up follows the ten-pull value rule, with the chase allowed during a festival period: +1.6 Eleph per pull (3.82 total). The festival side of the comparison is likewise credited 16 Eleph per ten pulls. Assumes a chase target remains — a bonus-unclaimed festival student such as a UE3-or-below Nel.</li>',
+  ],
+  ['連をフェス限の文字掘り（補填込み', ' pulls on a festival-period Eleph chase (topped-up rate '],
+
   ['文字</p>', ' Eleph</p>'],
 
   ['文字減少（フェス欠片', ' Eleph (of which festival shards '],
@@ -828,26 +864,6 @@ const ENGLISH_REPLACEMENTS = [
   ['欠片</td>', ' shards</td>'],
   ['<th>フェス限9名プールの文字</th>', '<th>Eleph from the nine-student pool</th>'],
   ['<th>恒常星3（参考・欠片は一括に含む）</th>', '<th>Permanent 3★ (reference; shards in the lump)</th>'],
-  [
-    '<p class="note">補填まで数えると<b>全構成で旧仕様が僅かに優位（差引−3〜−48文字）</b>。ただし固有1段の120文字にも届かない差で、1バナーあたりの実害は軽微。</p>',
-    '<p class="note">With every top-up counted, <b>the old system leads slightly in every configuration (net −3 to −48 Eleph)</b> — less than the 120 Eleph of a single UE step, so the per-banner harm is minor.</p>',
-  ],
-  [
-    '<p class="note">長年の最適解「一人の生徒連打」も、追加1連の実入りは補填込み<b>',
-    '<p class="note">The long-trusted optimum of hammering one student earns a topped-up <b>',
-  ],
-  [
-    '文字</b>——掘りの基準<b>',
-    ' Eleph</b> per extra pull against the <b>',
-  ],
-  [
-    '文字/連</b>と僅差。信仰するほどの優位も、失って泣くほどの損も無かった。</p>',
-    ' Eleph-per-pull</b> benchmark — a hair apart. Neither an edge worth worshipping nor a loss worth mourning.</p>',
-  ],
-  [
-    '<li>文字掘り（期待90連・200文字）の補填は10連価値ルールで行う。平常時+1.0文字/連（計3.22文字/連）、比較対象のフェス限側の募集にも16文字/10連を同様に計上。ボーナス未取得のフェス限が残る先生は掘りが更に得だが、できない先生もいるため保守値を採用。</li>',
-    '<li>The Eleph-chase top-up follows the ten-pull value rule: +1.0 Eleph per pull normally (3.22 total), with the festival side likewise credited 16 Eleph per ten pulls. Players holding bonus-unclaimed festival students do better, but the conservative value stands.</li>',
-  ],
 
   [
     '<li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li>',
@@ -856,7 +872,6 @@ const ENGLISH_REPLACEMENTS = [
   ['文字/連）に回すと', ' Eleph per pull) and they return about '],
 
   ['<h2>まとめ</h2>', '<h2>Bottom line</h2>'],
-  ['<p class="verdict"><b>結論：あまり気にしないで大丈夫。</b></p>', '<p class="verdict"><b>Verdict: nothing much to worry about.</b></p>'],
 
   [
     '<p class="note">イロハ集中は文字とのバランスのため<b>400連まで機械的に引き切る</b>。引けたら次へは<b>200連早抜け狙いの生存戦略</b>——期待獲得文字を減らしてでも石を残す。</p>',
@@ -872,7 +887,9 @@ const ENGLISH_REPLACEMENTS = [
 
   ['<b>呼出チャージは', '<b>Recruitment Charge saves '],
   ['石安くなる代わりに', ' Pyroxene at the cost of '],
-  ['連を文字掘り（補填込み', ' pulls on an Eleph chase (topped-up rate '],
+  ['文字相当——差引+', ' Eleph — net +'],
+  ['文字で<b>呼出チャージ優位</b>。</p>', ' Eleph: <b>Recruitment Charge wins</b>.</p>'],
+  ['石）。フェス限掘り（補填込み）', ' Pyroxene). The festival-period chase runs at '],
   ['文字相当——差引−', ' Eleph — net −'],
   ['文字で<b>呼出ポイント優位</b>。</p>', ' Eleph: <b>Recruitment Points wins</b>.</p>'],
 
@@ -992,7 +1009,6 @@ const ENGLISH_REPLACEMENTS = [
   ['">平均', '">avg '],
   ['<h3>収支</h3>', '<h3>The ledger</h3>'],
   ['<p>持ち出しは99連−短縮分の<b>', '<p>Netting the shortening out of 99 pulls leaves an outlay of <b>'],
-  ['石）。掘り効率（補填込み）', ' Pyroxene). The chase runs at a topped-up '],
   ['文字/連で換算して<b>', ' Eleph per pull, so in Eleph that is <b>'],
   ['文字</b>の支出。対する受け取りは以下。</p>', ' Eleph</b> spent. Here is what comes back.</p>'],
   ['<th>受け取るもの</th>', '<th>Received</th>'],
