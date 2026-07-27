@@ -395,8 +395,10 @@ function runBlockRun(targets, { focus }, maxBlocks = 4) {
       const [main, pu, spook] = key.split(':').map(Number);
       const { mass, letters } = cell;
       const missing = others - pu - spook;
-      if (main === 0) add2(`1:${pu}:${spook}`, mass, letters + mass * BONUS_LETTERS);
-      else if (missing > 0) add2(`${main}:${pu + 1}:${spook}`, mass, letters + mass * BONUS_LETTERS);
+      // 交換はイロハ以外の未所持を優先する。イロハは指名で掘っている最中なので、
+      // 交換で取るのは彼女が最後まで出なかったときの保険に回す。
+      if (missing > 0) add2(`${main}:${pu + 1}:${spook}`, mass, letters + mass * BONUS_LETTERS);
+      else if (main === 0) add2(`1:${pu}:${spook}`, mass, letters + mass * BONUS_LETTERS);
       else if (spook > 0) {
         // すり抜けで得た生徒は初回ボーナスが残っているので、引き取ると200文字になる。
         add2(`${main}:${pu + 1}:${spook - 1}`, mass, letters + mass * (PU_DUPLICATE_LETTERS + BONUS_LETTERS));
@@ -686,8 +688,8 @@ function retreatSection(result) {
     const charge = result.scenarios.charge[target].expectedPullsToAllBase;
     const point = result.scenarios.point[target].expectedPullsToAllBase;
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}</p>
-<h3>結論</h3>${verdictLines(result, target, withSpook)}<table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>仕様と進め方</th><th>確率</th><th>連数</th><th>石</th><th>持ち帰る文字</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}
-<h3>呼出チャージ</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>${target}PU期待値</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜け込</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜け率</th><td colspan="2" data-label="すり抜け率">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
+<h3>結論</h3>${verdictLines(result, target, withSpook)}<table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>仕様と進め方</th><th>確率</th><th>連数</th><th>石</th><th>獲得文字</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}
+<h3>呼出チャージ</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>獲得文字</th></tr></thead><tbody><tr><th>${target}PU期待値</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="獲得文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜け込</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="獲得文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="獲得文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜け率</th><td colspan="2" data-label="すり抜け率">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
 
 ${target === 2 ? pointBlock(result) : ''}</div>`;
   }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集種別ごとに引き継ぎ。フェス限で99連止めしておけば、<b>次の限定をチャージ99で開始できる</b>。指名は<b>素体所持・初回ボーナス未受領の生徒</b>（制服ネル等）。引ければ重複100＋ボーナス100の200文字。</p><h3>カウンタは無駄にならない</h3><p>途中で出てもカウンタは<b>積み直し</b>。99連完走時の残カウンタ期待値は${result.banking.expectedCharge.toFixed(0)}、持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>。暴発で台無しにはならない。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>持ち出しは99連−短縮分の<b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名追いの効率${result.banking.lettersPerPull.toFixed(2)}文字/連で換算して<b>${result.banking.costLetters.toFixed(0)}文字</b>の支出。対する受け取りは以下。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで支出を超過。星3と欠片は丸ごと上乗せ。<b>指名生徒の文字を取り切りたい先生には得。</b></p><p class="note">同じ99連ならフェス限期間のほうが欠片約${result.shardYield.bankGain}枚多い。凸に回せる分に割り引けば${result.shardYield.bankGainLetters}文字程度、判断には影響なし。</p><h3>出たら即止め</h3><p class="note">出た後も99連まで回すと効率は約1.1文字/連に半減。<b>出た時点で止めれば</b>持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連、素追いと同効率。</p><h3>向き・不向き</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素追いと同じ石効率にフェス限すり抜けが上乗せ。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連分返ってくる。</li><li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li></ul></div>`;
@@ -718,7 +720,7 @@ function verdictLines(result, target, withSpook) {
 
 function outcomeRows(result, targets) {
   const charge = result.retreat[targets].withSpook;
-  const rows = [`<tr><th>呼出チャージ</th><td data-label="確率">—</td><td data-label="連数">${charge.expectedPulls.toFixed(1)}連</td><td data-label="石">${stone(charge.expectedPulls)}石</td><td data-label="持ち帰る文字">${Math.round(charge.letters)}文字</td></tr>`];
+  const rows = [`<tr><th>呼出チャージ</th><td data-label="確率">—</td><td data-label="連数">${charge.expectedPulls.toFixed(1)}連</td><td data-label="石">${stone(charge.expectedPulls)}石</td><td data-label="獲得文字">${Math.round(charge.letters)}文字</td></tr>`];
   // 2PUは進め方による差が数文字しかないので、イロハ集中の1系統だけ載せる。
   const plansToShow = targets === 2
     ? [['focus', '呼出ポイント']]
@@ -727,9 +729,9 @@ function outcomeRows(result, targets) {
     const plan = result.blockRun[targets][id];
     plan.blocks.filter((block) => block.stopHere > 0.001).forEach((block, index) => {
       const head = index === 0 ? `<th rowspan="${plan.blocks.filter((b) => b.stopHere > 0.001).length + 1}">${label}</th>` : '';
-      rows.push(`<tr>${head}<td data-label="確率">${(block.stopHere * 100).toFixed(1)}%</td><td data-label="連数">${block.pulls}連</td><td data-label="石">${(block.pulls * PYROXENE_PER_PULL).toLocaleString('ja-JP')}石</td><td data-label="持ち帰る文字">${Math.round(block.lettersHere)}文字</td></tr>`);
+      rows.push(`<tr>${head}<td data-label="確率">${(block.stopHere * 100).toFixed(1)}%</td><td data-label="連数">${block.pulls}連</td><td data-label="石">${(block.pulls * PYROXENE_PER_PULL).toLocaleString('ja-JP')}石</td><td data-label="獲得文字">${Math.round(block.lettersHere)}文字</td></tr>`);
     });
-    rows.push(`<tr><td data-label="確率">ならして</td><td data-label="連数">${plan.pulls.toFixed(1)}連</td><td data-label="石">${stone(plan.pulls)}石</td><td data-label="持ち帰る文字">${Math.round(plan.letters)}文字</td></tr>`);
+    rows.push(`<tr><td data-label="確率">ならして</td><td data-label="連数">${plan.pulls.toFixed(1)}連</td><td data-label="石">${stone(plan.pulls)}石</td><td data-label="獲得文字">${Math.round(plan.letters)}文字</td></tr>`);
   }
   return rows;
 }
@@ -903,7 +905,7 @@ const ENGLISH_REPLACEMENTS = [
   ['復刻の制服ネル・リオも未所持の新規先生。対象4名すべて狙い。', 'A brand-new player who owns neither of the rerun pair, going after all four featured students.'],
   ['<th>そろえ方</th>', '<th>How they arrive</th>'],
   ['<th>期待募集回数</th>', '<th>Expected pulls</th>'],
-  ['<th>持ち帰る文字</th>', '<th>Eleph earned</th>'],
+  ['<th>獲得文字</th>', '<th>Eleph earned</th>'],
   ['aria-label="狙う人数"', 'aria-label="Number of students targeted"'],
   ['石</td>', ' Pyroxene</td>'],
   ['連</td>', ' pulls</td>'],
@@ -986,7 +988,7 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">At this scale the choice between focusing and switching matters less than the plain fact that <b>walking away early is barely an option</b>. Going after four featured students is a heavy commitment under either system.</p>',
   ],
   ['data-label="期待募集回数"', 'data-label="Expected pulls"'],
-  ['data-label="持ち帰る文字"', 'data-label="Eleph earned"'],
+  ['data-label="獲得文字"', 'data-label="Eleph earned"'],
   ['<th>差</th>', '<th>Gap</th>'],
 ];
 
