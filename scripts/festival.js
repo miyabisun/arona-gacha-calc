@@ -32,6 +32,11 @@ const MILESTONE_LETTERS = [
   { name: '固有3', cost: 520 },
   { name: '固有4', cost: 720 },
 ];
+// 1名を狙い続ける戦略の検討用。今回のPU対象は4名で、本命の凸は固有2を目標に置く。
+const FOCUS_TARGETS = 4;
+const FOCUS_HIT_CAP = 6;
+const FOCUS_MAX_PULLS = 600;
+const UE2_LETTERS = 340;
 // ショップの欠片交換レート。最初の20文字は1:1、以降20文字ごとに1段階ずつ重くなる。
 const SHARD_TIERS = [{ letters: 20, rate: 1 }, { letters: 20, rate: 2 }, { letters: 20, rate: 3 }, { letters: 20, rate: 4 }];
 const SHARD_TAIL_RATE = 5;
@@ -204,6 +209,70 @@ function shardsToLetters(shards) {
   return gained + Math.floor(remaining / SHARD_TAIL_RATE);
 }
 
+/** 対象1名をn回引いたときの実効文字。重複ぶんの欠片も文字へ換算して足す。 */
+function effectiveLetters(hits) {
+  if (hits === 0) return 0;
+  return hits * PU_DUPLICATE_LETTERS + shardsToLetters((hits - 1) * DUPLICATE_SHARDS);
+}
+
+/**
+ * 1名を狙い続ける戦略と、未所持を順に埋める戦略の比較。
+ * 対象は4名。ownedAtStart は募集開始時点で既に持っている人数。
+ * focus=true は本命を指名し続け、他は交換とすり抜けに任せる。
+ */
+function runFocusStrategy(ownedAtStart, { useCharge, useExchange, focus }, maxPulls = FOCUS_MAX_PULLS) {
+  let states = new Map([[`0:${ownedAtStart}:0`, 1]]);
+  const reachedUe2 = Array(maxPulls + 1).fill(0);
+  const otherOwned = Array(maxPulls + 1).fill(0);
+  const focusLetters = Array(maxPulls + 1).fill(0);
+
+  for (let pull = 1; pull <= maxPulls; pull += 1) {
+    const next = new Map();
+    const add = (key, mass) => next.set(key, (next.get(key) ?? 0) + mass);
+    for (const [key, mass] of states) {
+      const [hits, others, charge] = key.split(':').map(Number);
+      const othersLeft = (FOCUS_TARGETS - 1) - others;
+      // 集中なら常に本命。分散でも本命が未所持、または他に取る相手がいなければ本命を指名。
+      const namingFocus = focus || hits === 0 || othersLeft === 0;
+      const hit = useCharge ? chargeHitRate(charge) : NORMAL_PU_RATE;
+      const residual = useCharge ? chargeResidual(charge) : 1;
+      const free = namingFocus ? othersLeft : Math.max(0, othersLeft - 1);
+      const spook = residual * free * SPOOK_EACH_RATE;
+      const miss = 1 - hit - spook;
+      const nextCharge = useCharge ? charge + 1 : 0;
+
+      if (hit > 0) {
+        if (namingFocus) add(`${Math.min(hits + 1, FOCUS_HIT_CAP)}:${others}:0`, mass * hit);
+        else add(`${hits}:${Math.min(others + 1, FOCUS_TARGETS - 1)}:0`, mass * hit);
+      }
+      if (spook > 0) add(`${hits}:${Math.min(others + 1, FOCUS_TARGETS - 1)}:${nextCharge}`, mass * spook);
+      if (miss > 0) add(`${hits}:${others}:${nextCharge}`, mass * miss);
+    }
+    states = next;
+
+    if (useExchange && pull % EXCHANGE_INTERVAL === 0) {
+      const exchanged = new Map();
+      const add2 = (key, mass) => exchanged.set(key, (exchanged.get(key) ?? 0) + mass);
+      for (const [key, mass] of states) {
+        const [hits, others, charge] = key.split(':').map(Number);
+        // 交換は未所持を優先。全員そろっていれば本命へ回して文字を積む。
+        if (others < FOCUS_TARGETS - 1) add2(`${hits}:${others + 1}:${charge}`, mass);
+        else add2(`${Math.min(hits + 1, FOCUS_HIT_CAP)}:${others}:${charge}`, mass);
+      }
+      states = exchanged;
+    }
+
+    for (const [key, mass] of states) {
+      const [hits, others] = key.split(':').map(Number);
+      const letters = effectiveLetters(hits);
+      if (letters >= UE2_LETTERS) reachedUe2[pull] += mass;
+      otherOwned[pull] += mass * others;
+      focusLetters[pull] += mass * letters;
+    }
+  }
+  return { reachedUe2, otherOwned, focusLetters };
+}
+
 /** 累積確率が p を超える最小の連数。運用上の「どこまで払う覚悟が要るか」を示す。 */
 function percentilePull(curve, p) {
   for (let pull = 0; pull < curve.length; pull += 1) if (curve[pull] >= p) return pull;
@@ -260,6 +329,18 @@ function calculateFestival() {
   };
   banking.savedPulls = banking.expectedPullsPlain - banking.expectedPullsBanked;
 
+  // 「本命1名を狙い続ける」意味を、開始時の素体0人/1人の2ケースで測る。
+  const focusPlans = [
+    { id: 'pointFocus', useCharge: false, useExchange: true, focus: true },
+    { id: 'pointSpread', useCharge: false, useExchange: true, focus: false },
+    { id: 'chargeFocus', useCharge: true, useExchange: false, focus: true },
+    { id: 'chargeSpread', useCharge: true, useExchange: false, focus: false },
+  ];
+  const focus = Object.fromEntries([0, 1].map((ownedAtStart) => [
+    ownedAtStart,
+    Object.fromEntries(focusPlans.map((plan) => [plan.id, runFocusStrategy(ownedAtStart, plan)])),
+  ]));
+
   const result = {
     metadata: {
       method: 'exact dynamic programming; no Monte Carlo sampling',
@@ -288,6 +369,7 @@ function calculateFestival() {
       otherStar3Unused: '恒常星3の4.4%は内訳として記録するだけで計算には使わない。',
     },
     scenarios,
+    focus,
     banking,
     audit: { maxMassError },
   };
@@ -300,24 +382,33 @@ function pct(value) {
   return `${(value * 100).toFixed(2)}%`;
 }
 
-/** 曲線が100%へ達する上限。狙う人数ごとに200連単位で区切る。 */
-const CHART_MAX = { 2: 400, 3: 600, 4: 800 };
 /** 呼出ポイントが交換できる区切り。ここが意思決定の分岐点になる。 */
 const TABLE_PULLS = { 2: [200, 400], 3: [200, 400, 600], 4: [400, 600, 800] };
 
-function chartData(result) {
-  const trim = (values, max) => values.slice(0, max + 1).map((value) => Number(value.toFixed(5)));
-  const trimLetters = (values, max) => values.slice(0, max + 1).map((value) => Math.round(value));
-  return Object.fromEntries(TARGETS.map((target) => {
-    const max = CHART_MAX[target];
-    return [target, {
-      max,
-      chargeBase: trim(result.scenarios.charge[target].allBase, max),
-      pointBase: trim(result.scenarios.point[target].allBase, max),
-      chargeLetters: trimLetters(result.scenarios.charge[target].letters, max),
-      pointLetters: trimLetters(result.scenarios.point[target].letters, max),
-    }];
-  }));
+
+const FOCUS_PLAN_LABELS = [
+  ['pointFocus', '呼出ポイント・本命に集中'],
+  ['pointSpread', '呼出ポイント・順に埋める'],
+  ['chargeFocus', '呼出チャージ・本命に集中'],
+  ['chargeSpread', '呼出チャージ・順に埋める'],
+];
+
+function focusTables(result) {
+  return [0, 1].map((ownedAtStart) => {
+    const plans = result.focus[ownedAtStart];
+    const best = (pull, key) => Math.max(...FOCUS_PLAN_LABELS.map(([id]) => plans[id][key][pull]));
+    const rows = FOCUS_PLAN_LABELS.map(([id, label]) => {
+      const row = plans[id];
+      const cell = (pull, key, suffix) => {
+        const value = row[key][pull];
+        const mark = value >= best(pull, key) - 1e-9 ? ' class="best"' : '';
+        const shown = suffix === '%' ? `${(value * 100).toFixed(1)}%` : `${value.toFixed(2)}人`;
+        return `<td${mark}>${shown}</td>`;
+      };
+      return `<tr><th>${label}</th>${cell(400, 'reachedUe2', '%')}${cell(400, 'otherOwned', '人')}${cell(600, 'reachedUe2', '%')}${cell(600, 'otherOwned', '人')}</tr>`;
+    }).join('');
+    return `<h3>開始時の素体${ownedAtStart}人</h3><table><colgroup><col style="width:34%"><col style="width:16%"><col style="width:17%"><col style="width:16%"><col style="width:17%"></colgroup><thead><tr><th rowspan="2">進め方</th><th colspan="2">400連</th><th colspan="2">600連</th></tr><tr><th>本命が固有2</th><th>他3名の素体</th><th>本命が固有2</th><th>他3名の素体</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }).join('');
 }
 
 function letterRows(result) {
@@ -385,32 +476,19 @@ function expectationRows(result) {
   });
 }
 
-const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible,.chart-shell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:600;margin:0 0 8px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}.modes{display:flex;gap:4px;margin:0 0 12px}.modes button{flex:1 1 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--raised);color:var(--muted);font:500 15px/1.2 system-ui,sans-serif;cursor:pointer}.modes button[aria-pressed="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--on)}.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.legend{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:12px;margin:0 0 8px}.legend i{display:inline-block;width:24px;margin-right:4px;vertical-align:middle;border-top:3px solid}.legend .charge{border-color:var(--series-charge)}.legend .point{border-color:var(--series-point);border-top-style:dashed}.chart-shell{position:relative;border-radius:6px;touch-action:pan-y}.chart-shell svg{display:block;width:100%;height:auto;overflow:visible}.grid line.horizontal{stroke:var(--grid-minor);stroke-width:1}.grid line.minor{stroke:var(--grid-minor);stroke-width:.6}.grid line.major{stroke:var(--grid-major);stroke-width:1}.grid text{fill:var(--muted);font:12px system-ui,sans-serif;text-anchor:middle}.grid .y-label{text-anchor:end}.curve{fill:none;stroke-width:4;stroke-linejoin:round;stroke-linecap:round;pointer-events:none}.curve.charge{stroke:var(--series-charge)}.curve.point{stroke:var(--series-point);stroke-dasharray:10 7}.hit{fill:transparent;cursor:crosshair}.hover-dot{display:none;pointer-events:none;stroke:var(--raised);stroke-width:2}.hover-dot.charge{fill:var(--series-charge)}.hover-dot.point{fill:var(--series-point)}.chart-tip{position:absolute;display:none;max-width:calc(100% - 16px);pointer-events:none;background:var(--raised);color:var(--on);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;line-height:1.5;text-align:left;white-space:pre-line;font-variant-numeric:tabular-nums;z-index:3}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.charts{grid-template-columns:1fr}.curve{stroke-width:6}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}';
+const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:600;margin:0 0 8px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}';
 
 const GITHUB_LINK = '<a class="repo-link" href="https://github.com/miyabisun/arona-gacha-calc" aria-label="GitHubリポジトリを開く"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.4 3.5 6.5 6.8 7A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/></svg><span>miyabisun/arona-gacha-calc</span></a>';
 
-const FESTIVAL_SCRIPT = `const W=920,H=430,L=58,R=18,T=18,B=42,PW=W-L-R,PH=H-T-B;const modes=[...document.querySelectorAll('[data-mode]')];let target=3;
-function path(values,max){return values.map((value,pull)=>(pull?'L':'M')+(L+pull/max*PW).toFixed(2)+','+(T+(1-value)*PH).toFixed(2)).join(' ')}
-const TIERS=[['星4',100],['固有1',220],['固有2',340],['固有3',520],['固有4',720]];
-function markup(charge,point,max,label,scale){const ys=(scale?TIERS.filter(t=>t[1]<=scale).map(t=>[t[1]/scale,t[0]]):[0,.25,.5,.75,1].map(v=>[v,(v*100)+'%'])).map(([value,text])=>{const y=T+(1-value)*PH;return '<line class="horizontal" x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'"/><text class="y-label" x="'+(L-10)+'" y="'+(y+4)+'">'+text+'</text>'}).join(''),xs=Array.from({length:Math.floor(max/50)+1},(_,i)=>i*50).map(pull=>{const x=L+pull/max*PW,major=pull%200===0;return '<line class="'+(major?'major':'minor')+'" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(H-B)+'"/>'+(major?'<text class="x-label" x="'+x+'" y="'+(H-14)+'">'+pull+'</text>':'')}).join('');return '<div class="chart-shell" tabindex="0" aria-label="'+label+'。左右矢印で1連、Page UpとPage Downで10連、HomeとEndで移動できます"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+label+'"><g class="grid">'+ys+xs+'</g><path class="curve point" d="'+path(point,max)+'"/><path class="curve charge" d="'+path(charge,max)+'"/><rect class="hit" x="'+L+'" y="'+T+'" width="'+PW+'" height="'+PH+'"/><circle class="hover-dot point" r="5"/><circle class="hover-dot charge" r="5"/></svg><output class="chart-tip" aria-live="polite"></output></div>'}
-function wire(host,charge,point,max,noun,scale){const fmt=value=>scale?Math.round(value*scale)+'文字':(value*100).toFixed(2)+'%';const shell=host.querySelector('.chart-shell'),svg=shell.querySelector('svg'),hit=shell.querySelector('.hit'),tip=shell.querySelector('.chart-tip'),chargeDot=shell.querySelector('.hover-dot.charge'),pointDot=shell.querySelector('.hover-dot.point');let current=0;const show=pull=>{current=Math.max(0,Math.min(max,pull));const x=L+current/max*PW,chargeY=T+(1-charge[current])*PH,pointY=T+(1-point[current])*PH;for(const [dot,y] of [[chargeDot,chargeY],[pointDot,pointY]]){dot.setAttribute('cx',x);dot.setAttribute('cy',y);dot.style.display='block'}tip.style.display='block';tip.textContent=current+'連 '+noun+'\\n呼出チャージ '+fmt(charge[current])+'\\n呼出ポイント '+fmt(point[current]);const rect=svg.getBoundingClientRect(),pointLeft=x/W*rect.width,pointTop=pointY/H*rect.height,tipWidth=tip.offsetWidth;tip.style.left=Math.max(4,Math.min(rect.width-tipWidth-4,pointLeft+8))+'px';tip.style.top=(pointTop+8)+'px'};const hide=()=>{if(document.activeElement===shell)return;tip.style.display='none';chargeDot.style.display='none';pointDot.style.display='none'};hit.addEventListener('pointermove',event=>{const rect=svg.getBoundingClientRect(),svgX=(event.clientX-rect.left)/rect.width*W;show(Math.round(Math.max(0,Math.min(1,(svgX-L)/PW))*max))});hit.addEventListener('pointerleave',hide);shell.addEventListener('focus',()=>show(current));shell.addEventListener('blur',hide);shell.addEventListener('keydown',event=>{const moves={ArrowLeft:-1,ArrowRight:1,PageUp:10,PageDown:-10};let next=current;if(event.key in moves)next+=moves[event.key];else if(event.key==='Home')next=0;else if(event.key==='End')next=max;else return;event.preventDefault();show(next)})}
-function render(){const series=DATA[target],max=series.max;const top=Math.max(720,Math.ceil(Math.max(series.chargeLetters[max],series.pointLetters[max])/100)*100);
-const asRatio=values=>values.map(value=>value/top);
-for(const [id,charge,point,noun,scale] of [['chart-letters',asRatio(series.chargeLetters),asRatio(series.pointLetters),'文字',top],['chart-base',series.chargeBase,series.pointBase,'素体',0]]){const host=document.getElementById(id),label=scale?target+'名を狙ったときの期待文字数':target+'名の素体を全員分そろえる累積確率';host.innerHTML=markup(charge,point,max,label,scale);wire(host,charge,point,max,noun,scale)}
-modes.forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.mode)===target)))}
-modes.forEach(button=>button.addEventListener('click',()=>{target=Number(button.dataset.mode);render()}));render();`;
 
 function renderFestivalHtml(result) {
-  const data = JSON.stringify(chartData(result)).replaceAll('<', '\\u003c');
   const rates = result.rates;
   const banking = result.banking;
-  const modes = TARGETS.map((target) => `<button type="button" data-mode="${target}" aria-pressed="${target === 3}">${target}名</button>`).join('');
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5.5フェス限の新旧比較</title><style>
 ${FESTIVAL_CSS}
 </style></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5フェス限の新旧比較</h1>${GITHUB_LINK}</div><p class="lead">フェス限定募集は星3が6%へ倍化し、指名していないフェス限生徒も出現します。この「すり抜け」で狙っている別の生徒が手に入るため、呼出ポイントの200連区切りが有利になる場面があります。</p></header>
 <section class="panel"><h2>計算に使う前提</h2><ul class="rules"><li>フェス限定募集の星3排出率は <b>${pct(rates.festivalStar3)}</b>。</li><li>指名した1名の排出率は <b>${pct(rates.namedPu)}</b>。呼出チャージではチャージ99で50%、199で100%。</li><li>新旧フェス限10名から指名中の1名を除いた<b>9名</b>が <b>${pct(rates.spookPoolTotal)}</b> を等分し、1名あたり <b>${pct(rates.spookEach)}</b>。</li><li>残る <b>${pct(rates.otherStar3)}</b> は恒常星3で、内訳として記録するだけで計算には使いません。</li><li>初回PUボーナスは<b>指名PUの自引きと呼出ポイント交換</b>でのみ得られます。すり抜けで確保しても付きません。</li><li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li></ul></section>
-<section class="panel"><h2>持ち帰る文字と、そろう確率</h2><div class="modes" role="group" aria-label="狙う人数">${modes}</div><div class="legend" aria-label="グラフの凡例"><span><i class="charge"></i>呼出チャージ（実線）</span><span><i class="point"></i>呼出ポイント（破線）</span></div><div class="charts"><div><h3>期待文字数</h3><div id="chart-letters"></div></div><div><h3>全員の素体がそろう確率</h3><div id="chart-base"></div></div></div><p class="note">左の横線は上から固有4（720文字）、固有3（520）、固有2（340）、固有1（220）、星4（100）です。素体がそろうことはゴールではなく、凸を進める文字がいくつ残ったかが成果になります。</p></section>
-<section class="panel"><h2>区切りごとに持ち帰る文字</h2><table><colgroup><col style="width:14%"><col style="width:14%"><col style="width:26%"><col style="width:26%"><col style="width:20%"></colgroup><thead><tr><th>狙う人数</th><th>連数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead>${letterRows(result).join('')}</table><p class="note">狙う人数を変えても文字数はほとんど動きません。文字は「何人狙ったか」ではなく「何回引き当てたか」で決まるためです。呼出ポイントが一貫して上回るのは、0.7%の自引きと200ptの交換が独立に走り、同じ200連あたりの獲得機会が多いからです（呼出チャージ2.22回に対し呼出ポイント2.40回）。</p></section>
+<section class="panel"><h2>すり抜けによる旧仕様の上振れ狙い</h2><p>今回のPU対象4名のうち、アタッカーは固有2まで進めないと仕事をしません。そこで<b>本命1名を指名し続け、残りは交換とすり抜けに任せる</b>戦略が成立するかを測りました。比較相手は、未所持を順に埋めていく普通の進め方です。</p><ul class="rules"><li>本命は水着イロハや制服ネルのようなアタッカー1名。目標は<b>固有2（340文字）</b>。</li><li>本命を引くたびに100文字。2回目以降は50欠片も付き、欠片は安い段から文字へ換算します。3回引けば353文字で固有2に届きます。</li><li>残る3名は素体確保が目標。呼出ポイントなら200連ごとの交換で確実に埋まります。</li><li>開始時の素体が0人（新規）と1人（ネルかリオをすり抜けで確保済み）の2ケースを見ます。</li></ul>${focusTables(result)}<p class="note">呼出ポイントで本命を指名し続けても、他の3名は交換で埋まるため取り残されません。開始時に1名持っていれば400連で他3名がそろい、しかも本命の固有2到達は分散より高くなります。つまり<b>本命を狙い続ける不利がほぼ消えます</b>。</p><p class="note">呼出チャージで同じことをすると本命の到達率は最も高くなりますが、交換がないぶん他の3名がすり抜け頼みになり、400連でも1名前後しか手に入りません。<b>本命に集中しながら他も確保できるのは呼出ポイントだけ</b>で、これがすり抜けを上振れとして扱える唯一の形です。</p></section>
 <section class="panel"><h2>凸のどこまで届くか</h2><table><colgroup><col style="width:22%"><col style="width:22%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th>到達段位</th><th>必要文字</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead><tbody>${milestoneRows(result).join('')}</tbody></table><p class="note">3名を狙った場合に、対象3名分を合計した文字が段位のコストへ届く連数です。1名へ集中させた場合の数字ではありません。星3を出発点として星4に100文字、固有1にさらに120文字、固有2に120文字、固有3に180文字、固有4に200文字が必要です。</p></section>
 <section class="panel"><h2>区切りまで回したときの到達率</h2><table><colgroup><col style="width:16%"><col style="width:16%"><col style="width:34%"><col style="width:34%"></colgroup><thead><tr><th>狙う人数</th><th>連数</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead>${reachRows(result).join('')}</table><p class="note">呼出ポイントは200連ごとに1名を確実に交換できるため、区切りちょうどで見ると呼出チャージより高くなります。狙う人数が増えるほど差は開きます。</p></section>
 <section class="panel"><h2>降りどきが選べるかどうか</h2><p>呼出チャージは全員そろうまで降りにくく、呼出ポイントは200連ごとに続行か撤退かを選べます。下は呼出チャージで全員の素体がそろう連数の散らばりで、半分の先生は中央値で降りられますが、残り半分はそこから先も払い続けることになります。</p><table><colgroup><col style="width:20%"><col style="width:20%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>狙う人数</th><th>半数</th><th>4人に3人</th><th>10人に9人</th><th>最悪</th></tr></thead><tbody>${riskRows(result).join('')}</tbody></table><p class="note">呼出ポイントなら200連で1名分の交換が確定するため、同じ予算を決め打ちで投じても手ぶらになりません。呼出チャージは天井が200連ごとに区切られる点は同じですが、自引きがそのままチャージを消費するので、取得機会が交換ぶんだけ少なくなります。</p></section>
@@ -418,7 +496,7 @@ ${FESTIVAL_CSS}
 <section class="panel"><h2>そろうまでの期待募集回数</h2><table><colgroup><col style="width:20%"><col style="width:40%"><col style="width:40%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead><tbody>${expectationRows(result).join('')}</tbody></table><p class="note">区切りを気にせず引き続けた場合の平均です。到達率の表とは逆に、2名・3名では呼出チャージのほうが短く済みます。区切りで止めるか揃うまで回すかで、有利な仕様が入れ替わります。</p></section>
 <section class="panel"><h2>99連を次の限定募集へ持ち越す</h2><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p><p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>${banking.guaranteedWithinBanked}連目</b>には199の確定枠へ届きます。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>1人を確保するまで</th><th>期待</th><th>最大</th><th>短縮</th></tr></thead><tbody><tr><th>チャージ0から</th><td>${banking.expectedPullsPlain.toFixed(1)}連</td><td>${banking.guaranteedWithinPlain}連</td><td>—</td></tr><tr><th>チャージ99から</th><td class="best">${banking.expectedPullsBanked.toFixed(1)}連</td><td class="best">${banking.guaranteedWithinBanked}連</td><td class="best">−${banking.savedPulls.toFixed(1)}連</td></tr></tbody></table><p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p><h3>どこで99連を貯めるか</h3><p>同じ99連でも、貯める場所によって副産物が変わります。フェス限定募集は星3が <b>${pct(rates.festivalStar3)}</b> なので99連あたり期待 <b>${banking.festivalStar3PerBank.toFixed(2)}人</b>。限定募集は <b>${pct(rates.limitedStar3)}</b> のままなので <b>${banking.limitedStar3PerBank.toFixed(2)}人</b> にとどまります。貯めるなら星3が倍のフェス限定募集のあいだに進めておくほうが、同じ連数で多く拾えます。</p><p class="note">ただし恒常星3の価値は1人あたり30文字と50欠片で、欲しい生徒が恒常の分母にどれだけ含まれるか次第です。「倍拾える」がそのまま「倍うれしい」にはなりません。</p><p class="note">また、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>${pct(banking.survivalToBank)}</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
-<script>const DATA=${data};${FESTIVAL_SCRIPT}</script></body></html>`;
+</body></html>`;
 }
 
 /**
@@ -456,22 +534,43 @@ const ENGLISH_REPLACEMENTS = [
     '<li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li>',
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
-  ['<h2>持ち帰る文字と、そろう確率</h2>', '<h2>Eleph earned, and the odds of completing</h2>'],
-  ['aria-label="狙う人数"', 'aria-label="Number of students targeted"'],
-  ['aria-label="グラフの凡例"', 'aria-label="Chart legend"'],
-  ['呼出チャージ（実線）', 'Recruitment Charge (solid)'],
-  ['呼出ポイント（破線）', 'Recruitment Points (dashed)'],
-  ['<h3>期待文字数</h3>', '<h3>Expected Eleph</h3>'],
-  ['<h3>全員の素体がそろう確率</h3>', '<h3>Chance every student is owned</h3>'],
+  ['<h2>すり抜けによる旧仕様の上振れ狙い</h2>', '<h2>Playing off-target pulls as upside on Recruitment Points</h2>'],
   [
-    '<p class="note">左の横線は上から固有4（720文字）、固有3（520）、固有2（340）、固有1（220）、星4（100）です。素体がそろうことはゴールではなく、凸を進める文字がいくつ残ったかが成果になります。</p>',
-    '<p class="note">The guides on the left chart mark UE4 (720 Eleph), UE3 (520), UE2 (340), UE1 (220) and 5★ (100), top to bottom. Owning the students is not the finish line — what matters is how much Eleph you carry away toward those upgrades.</p>',
+    '<p>今回のPU対象4名のうち、アタッカーは固有2まで進めないと仕事をしません。そこで<b>本命1名を指名し続け、残りは交換とすり抜けに任せる</b>戦略が成立するかを測りました。比較相手は、未所持を順に埋めていく普通の進め方です。</p>',
+    '<p>Of the four featured students, the attackers do not pull their weight until UE2. That raises the question of whether it works to <b>keep selecting one priority student and leave the rest to exchanges and off-target pulls</b>. The comparison is the ordinary approach of filling in whoever you do not own yet.</p>',
   ],
-  ['<h2>区切りごとに持ち帰る文字</h2>', '<h2>Eleph earned at each milestone</h2>'],
-  ['<th>差</th>', '<th>Gap</th>'],
   [
-    '<p class="note">狙う人数を変えても文字数はほとんど動きません。文字は「何人狙ったか」ではなく「何回引き当てたか」で決まるためです。呼出ポイントが一貫して上回るのは、0.7%の自引きと200ptの交換が独立に走り、同じ200連あたりの獲得機会が多いからです（呼出チャージ2.22回に対し呼出ポイント2.40回）。</p>',
-    '<p class="note">Targeting more students barely changes the Eleph total, because Eleph depends on how many times you hit — not on how many students you were after. Recruitment Points stays ahead because its 0.7% pulls and its 200-point exchange run independently, giving more chances per 200 pulls (2.40 against 2.22 for Recruitment Charge).</p>',
+    '<li>本命は水着イロハや制服ネルのようなアタッカー1名。目標は<b>固有2（340文字）</b>。</li>',
+    '<li>The priority is a single attacker such as Swimsuit Iroha or Uniform Nel, aiming for <b>UE2 (340 Eleph)</b>.</li>',
+  ],
+  [
+    '<li>本命を引くたびに100文字。2回目以降は50欠片も付き、欠片は安い段から文字へ換算します。3回引けば353文字で固有2に届きます。</li>',
+    '<li>Each hit on the priority pays 100 Eleph, and every hit after the first adds 50 shards, converted at the cheapest available rate. Three hits reach 353 Eleph — enough for UE2.</li>',
+  ],
+  [
+    '<li>残る3名は素体確保が目標。呼出ポイントなら200連ごとの交換で確実に埋まります。</li>',
+    '<li>For the other three the goal is simply owning them, which Recruitment Points guarantees through its exchange every 200 pulls.</li>',
+  ],
+  [
+    '<li>開始時の素体が0人（新規）と1人（ネルかリオをすり抜けで確保済み）の2ケースを見ます。</li>',
+    '<li>Two starting points are shown: owning none of them, and already owning one (Nel or Rio picked up earlier).</li>',
+  ],
+  ['<h3>開始時の素体0人</h3>', '<h3>Starting with none owned</h3>'],
+  ['<h3>開始時の素体1人</h3>', '<h3>Starting with one owned</h3>'],
+  ['<th rowspan="2">進め方</th>', '<th rowspan="2">Approach</th>'],
+  ['<th>本命が固有2</th>', '<th>Priority at UE2</th>'],
+  ['<th>他3名の素体</th>', '<th>Others owned</th>'],
+  ['呼出ポイント・本命に集中', 'Recruitment Points, focused'],
+  ['呼出ポイント・順に埋める', 'Recruitment Points, spread'],
+  ['呼出チャージ・本命に集中', 'Recruitment Charge, focused'],
+  ['呼出チャージ・順に埋める', 'Recruitment Charge, spread'],
+  [
+    '<p class="note">呼出ポイントで本命を指名し続けても、他の3名は交換で埋まるため取り残されません。開始時に1名持っていれば400連で他3名がそろい、しかも本命の固有2到達は分散より高くなります。つまり<b>本命を狙い続ける不利がほぼ消えます</b>。</p>',
+    '<p class="note">Under Recruitment Points, staying on the priority does not strand the other three — the exchange fills them in regardless. Starting with one already owned, 400 pulls completes the other three while still reaching UE2 more often than spreading out. In that case <b>focusing costs you almost nothing</b>.</p>',
+  ],
+  [
+    '<p class="note">呼出チャージで同じことをすると本命の到達率は最も高くなりますが、交換がないぶん他の3名がすり抜け頼みになり、400連でも1名前後しか手に入りません。<b>本命に集中しながら他も確保できるのは呼出ポイントだけ</b>で、これがすり抜けを上振れとして扱える唯一の形です。</p>',
+    '<p class="note">Doing the same under Recruitment Charge gives the highest UE2 rate of all, but with no exchange the other three depend entirely on off-target pulls, landing only about one of them even by 400 pulls. <b>Only Recruitment Points lets you focus and still collect the rest</b>, which is the one arrangement where off-target pulls work as genuine upside.</p>',
   ],
   ['<h2>凸のどこまで届くか</h2>', '<h2>How far up the upgrade track</h2>'],
   ['<th>到達段位</th>', '<th>Upgrade</th>'],
@@ -480,21 +579,18 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">3名を狙った場合に、対象3名分を合計した文字が段位のコストへ届く連数です。1名へ集中させた場合の数字ではありません。星3を出発点として星4に100文字、固有1にさらに120文字、固有2に120文字、固有3に180文字、固有4に200文字が必要です。</p>',
     '<p class="note">Pull counts at which the Eleph earned across all three targeted students reaches each cost. These are not the figures for funnelling everything into one student. Starting from 3★, reaching 5★ costs 100 Eleph, then UE1 a further 120, UE2 another 120, UE3 another 180, and UE4 another 200.</p>',
   ],
-  ['文字</b>', ' Eleph</b>'],
   ['＋', '+'],
-  ['欠片</small>', ' shards</small>'],
   ['文字</td>', ' Eleph</td>'],
+  // 人数の単位は列見出しが担うので、英語では数値だけ残す。
+  ['人</td>', '</td>'],
+  ['>2名<', '>2 students<'],
+  ['>3名<', '>3 students<'],
+  ['>4名<', '>4 students<'],
   ['<th>星4</th>', '<th>5★</th>'],
   ['<th>固有1</th>', '<th>UE1</th>'],
   ['<th>固有2</th>', '<th>UE2</th>'],
   ['<th>固有3</th>', '<th>UE3</th>'],
   ['<th>固有4</th>', '<th>UE4</th>'],
-  ["TIERS=[['星4',100],['固有1',220],['固有2',340],['固有3',520],['固有4',720]]", "TIERS=[['5★',100],['UE1',220],['UE2',340],['UE3',520],['UE4',720]]"],
-  ["Math.round(value*scale)+'文字'", "Math.round(value*scale)+' Eleph'"],
-  ["target+'名を狙ったときの期待文字数'", "'Expected Eleph when targeting '+target+(target===1?' student':' students')"],
-  ["target+'名の素体を全員分そろえる累積確率'", "'Cumulative probability of owning all '+target+(target===1?' student':' students')"],
-  ["'文字',top]", "'Eleph',top]"],
-  ["'素体',0]", "'owned',0]"],
   ['<h2>区切りまで回したときの到達率</h2>', '<h2>Results at each milestone</h2>'],
   [
     '<p class="note">呼出ポイントは200連ごとに1名を確実に交換できるため、区切りちょうどで見ると呼出チャージより高くなります。狙う人数が増えるほど差は開きます。</p>',
@@ -520,6 +616,7 @@ const ENGLISH_REPLACEMENTS = [
     '<p>If an off-target pull lands before you hit the student you selected, exchanging for that same student pays <b>100 Eleph for the duplicate, 100 more from the unspent first-time bonus, and 50 shards</b> all at once. To judge whether that is worth chasing, here is the chance an off-target pull arrives before your first hit.</p>',
   ],
   ['<th>待っている枠</th>', '<th>Slots waiting</th>'],
+  ['<th>差</th>', '<th>Gap</th>'],
   ['<th>1枠</th>', '<th>1 slot</th>'],
   ['<th>2枠</th>', '<th>2 slots</th>'],
   ['<th>3枠</th>', '<th>3 slots</th>'],
@@ -573,17 +670,11 @@ const ENGLISH_REPLACEMENTS = [
   ['<th>呼出チャージ</th>', '<th>Recruitment Charge</th>'],
   ['<th>呼出ポイント</th>', '<th>Recruitment Points</th>'],
   // クライアント側の文言。ラベルは英語の語順に組み替える。
-  ["current+'連 '+noun+'\\n呼出チャージ '", "current+' pulls · '+noun+'\\nRecruitment Charge '"],
-  ["'\\n呼出ポイント '", "'\\nRecruitment Points '"],
-  ['。左右矢印で1連、Page UpとPage Downで10連、HomeとEndで移動できます', '. Use Left and Right for 1 pull, Page Up and Page Down for 10 pulls, and Home and End to jump'],
   // 短い語は最後に。タグ境界を含めて誤爆を防ぐ。
   ['<small>素体</small>', '<small>owned</small>'],
   ['<small>ボーナス</small>', '<small>bonus</small>'],
   ['連</b>', ' pulls</b>'],
   ['連</td>', ' pulls</td>'],
-  ['>2名<', '>2 students<'],
-  ['>3名<', '>3 students<'],
-  ['>4名<', '>4 students<'],
   ['200連</th>', '200 pulls</th>'],
   ['400連</th>', '400 pulls</th>'],
   ['600連</th>', '600 pulls</th>'],
@@ -600,14 +691,19 @@ function renderFestival(result, locale = 'ja') {
 /** 監査用JSONは10連刻みに間引く。曲線をそのまま書くと配布物が肥大するため。 */
 function thinForJson(result, step = 10) {
   const thin = (values) => values.filter((_, pull) => pull % step === 0 || pull === values.length - 1);
-  const scenarios = Object.fromEntries(Object.entries(result.scenarios).map(([id, byTarget]) => [
+  const thinGroup = (group) => Object.fromEntries(Object.entries(group).map(([id, byKey]) => [
     id,
-    Object.fromEntries(Object.entries(byTarget).map(([target, row]) => [
-      target,
-      Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? thin(value) : value])),
+    Object.fromEntries(Object.entries(byKey).map(([key, row]) => [
+      key,
+      Object.fromEntries(Object.entries(row).map(([name, value]) => [name, Array.isArray(value) ? thin(value) : value])),
     ])),
   ]));
-  return { ...result, metadata: { ...result.metadata, curveSampleStep: step }, scenarios };
+  return {
+    ...result,
+    metadata: { ...result.metadata, curveSampleStep: step },
+    scenarios: thinGroup(result.scenarios),
+    focus: thinGroup(result.focus),
+  };
 }
 
 function main() {
