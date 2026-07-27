@@ -687,8 +687,12 @@ function retreatSection(result) {
     const point = result.scenarios.point[target].expectedPullsToAllBase;
     const seq = result.blockRun[target].sequential;
     const pointPlan = target === 2 ? result.blockRun[target].focus : seq;
+    const savedPulls2 = pointPlan.pulls - withSpook.expectedPulls;
+    const lostLetters2 = pointPlan.letters - withSpook.letters;
+    const recovered2 = savedPulls2 * result.banking.lettersPerPull;
+    const net2 = recovered2 - lostLetters2;
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}</p>
-<h3>結論</h3><p class="verdict">石で選ぶなら<b>呼出チャージ</b>（${stone(pointPlan.pulls - withSpook.expectedPulls)}石安い）。文字で選ぶなら<b>呼出ポイント</b>（+${Math.round(pointPlan.letters - withSpook.letters)}文字）。</p><table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>仕様と進め方</th><th>確率</th><th>連数</th><th>石</th><th>持ち帰る文字</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}
+<h3>結論</h3><p class="verdict"><b>呼出チャージは${stone(savedPulls2)}石安くなる代わりに${Math.round(lostLetters2)}文字減少。</b>浮いた${savedPulls2.toFixed(1)}連を期待値90連の200文字掘りに回すと${Math.round(recovered2)}文字相当——差引${net2 >= 0 ? '+' : '−'}${Math.abs(Math.round(net2))}文字で<b>${net2 >= 0 ? '呼出チャージ' : '呼出ポイント'}優位</b>。</p><table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>仕様と進め方</th><th>確率</th><th>連数</th><th>石</th><th>持ち帰る文字</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}
 <h3>呼出チャージ</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>${target}PU期待値</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜け込</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜け率</th><td colspan="2" data-label="すり抜け率">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
 
 ${target === 2 ? pointBlock(result) : ''}</div>`;
@@ -786,6 +790,15 @@ const ENGLISH_REPLACEMENTS = [
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
+  ['<p class="verdict"><b>呼出チャージは', '<p class="verdict"><b>Recruitment Charge saves '],
+  ['石安くなる代わりに', ' Pyroxene at the cost of '],
+  ['文字減少。</b>浮いた', ' Eleph.</b> Spend the freed '],
+  ['連を期待値90連の200文字掘りに回すと', ' pulls on a 200-Eleph chase (expected 90 pulls) and they return about '],
+  ['文字相当——差引+', ' Eleph — net +'],
+  ['文字相当——差引−', ' Eleph — net −'],
+  ['文字で<b>呼出チャージ優位</b>。</p>', ' Eleph: <b>Recruitment Charge wins</b>.</p>'],
+  ['文字で<b>呼出ポイント優位</b>。</p>', ' Eleph: <b>Recruitment Points wins</b>.</p>'],
+
   ['<h3>呼出ポイント</h3>', '<h3>Recruitment Points</h3>'],
   [
     '<p>機械的に水着イロハを200連指名。200連時点の結果だけで分岐。</p>',
@@ -847,9 +860,6 @@ const ENGLISH_REPLACEMENTS = [
   ],
 
   ['<h3>結論</h3>', '<h3>Verdict</h3>'],
-  ['<p class="verdict">石で選ぶなら<b>呼出チャージ</b>（', '<p class="verdict">For Pyroxene, <b>Recruitment Charge</b> ('],
-  ['石安い）。文字で選ぶなら<b>呼出ポイント</b>（+', ' cheaper). For Eleph, <b>Recruitment Points</b> (+'],
-  ['文字）。</p>', ' Eleph).</p>'],
 
   ['<h3>出たら即止め</h3>', '<h3>But stop the moment she arrives</h3>'],
   [
