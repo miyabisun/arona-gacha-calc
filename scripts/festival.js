@@ -411,9 +411,9 @@ function runBlockRun(targets, { focus }, maxBlocks = 4) {
     const keep = new Map();
     let finished = 0;
     let finishedLetters = 0;
-    // 文字とのバランスのため、(人数-1)ブロックまでは揃っていても機械的に引き切る。
-    // 幸運な早抜け(例: 3PUで200連時点の完了)は趣旨に反するため認めない。
-    const mayStop = block >= targets - 1;
+    // イロハ連打は文字とのバランスのため、(人数-1)ブロックまでは揃っていても機械的に引き切る。
+    // PU切替は早抜け狙いの生存戦略なので、揃ったブロックで即降りる。
+    const mayStop = focus ? block >= targets - 1 : true;
     for (const [key, cell] of states) {
       const [main, pu, spook] = key.split(':').map(Number);
       if (mayStop && main >= 1 && pu + spook >= others) { finished += cell.mass; finishedLetters += cell.letters; }
@@ -663,8 +663,8 @@ function pointBlock(result) {
 // 結論表の直下に置く説明。2PUは残業の重さを、3PU以上は表の読み方を示す。
 const CONCLUSION_NOTE = {
   2: '<p class="note">呼出ポイントは200連単位でしか降りられない。<b>約8割が200連で解放、残る2割は400連目開始という地獄の残業。</b></p>',
-  3: '<p class="note">文字とのバランスのため、途中で揃っても<b>400連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
-  4: '<p class="note">文字とのバランスのため、途中で揃っても<b>600連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
+  3: '<p class="note">イロハ集中は文字とのバランスのため<b>400連まで機械的に引き切る</b>。引けたら次へは<b>200連早抜け狙いの生存戦略</b>——期待獲得文字を減らしてでも石を残す。</p>',
+  4: '<p class="note">イロハ集中は文字とのバランスのため<b>600連まで機械的に引き切る</b>。引けたら次へは<b>早抜け狙いの生存戦略</b>——期待獲得文字を減らしてでも石を残す。</p>',
 };
 
 // 呼出チャージ節の表下に置く、狙い順の説明。
@@ -800,12 +800,12 @@ const ENGLISH_REPLACEMENTS = [
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
   [
-    '<p class="note">文字とのバランスのため、途中で揃っても<b>400連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
-    '<p class="note">For the Eleph balance, the run goes <b>mechanically to 400 pulls</b> even if everyone lands earlier. A lucky early exit defeats the point and is not taken.</p>',
+    '<p class="note">イロハ集中は文字とのバランスのため<b>400連まで機械的に引き切る</b>。引けたら次へは<b>200連早抜け狙いの生存戦略</b>——期待獲得文字を減らしてでも石を残す。</p>',
+    '<p class="note">Staying on Iroha runs <b>mechanically to 400 pulls</b> for the Eleph balance. Moving on plays for the <b>200-pull early exit — a survival strategy</b> that trades expected Eleph for stones kept toward tomorrow\'s banner.</p>',
   ],
   [
-    '<p class="note">文字とのバランスのため、途中で揃っても<b>600連までは機械的に引き切る</b>。幸運な早抜けは趣旨に反するため採らない。</p>',
-    '<p class="note">For the Eleph balance, the run goes <b>mechanically to 600 pulls</b> even if everyone lands earlier. A lucky early exit defeats the point and is not taken.</p>',
+    '<p class="note">イロハ集中は文字とのバランスのため<b>600連まで機械的に引き切る</b>。引けたら次へは<b>早抜け狙いの生存戦略</b>——期待獲得文字を減らしてでも石を残す。</p>',
+    '<p class="note">Staying on Iroha runs <b>mechanically to 600 pulls</b> for the Eleph balance. Moving on plays for the <b>early exit — a survival strategy</b> that trades expected Eleph for stones kept toward tomorrow\'s banner.</p>',
   ],
 
   ['<b>対・イロハ集中</b>｜', '<b>vs staying on Iroha</b> | '],
@@ -816,6 +816,9 @@ const ENGLISH_REPLACEMENTS = [
   ['文字減少。</b>浮いた', ' Eleph.</b> Spend the freed '],
   ['連を期待値90連の200文字掘りに回すと', ' pulls on a 200-Eleph chase (expected 90 pulls) and they return about '],
   ['文字相当——差引+', ' Eleph — net +'],
+  ['文字相当——差引−', ' Eleph — net −'],
+  ['文字で<b>呼出ポイント優位</b>。</p>', ' Eleph: <b>Recruitment Points wins</b>.</p>'],
+
   ['文字で<b>呼出チャージ優位</b>。</p>', ' Eleph: <b>Recruitment Charge wins</b>.</p>'],
 
   ['<h3>呼出ポイント</h3>', '<h3>Recruitment Points</h3>'],
