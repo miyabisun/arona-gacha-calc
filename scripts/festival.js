@@ -526,6 +526,14 @@ function calculateFestival() {
   banking.otherStar3Normal = NORMAL_BANNER_STAR3_RATE - NORMAL_PU_RATE;
   banking.otherStar3Festival = FES_STAR3_RATE - NORMAL_PU_RATE - SPOOK_TOTAL_RATE;
   banking.extraStar3PerBank = (banking.otherStar3Festival - banking.otherStar3Normal) * BANK_PULLS;
+  // 限定募集は2名で1セット。1人目だけ持ち込んだチャージが効く。
+  banking.twoSetPlain = banking.expectedPullsPlain * 2;
+  banking.twoSetBanked = banking.expectedPullsBanked + banking.expectedPullsPlain;
+  banking.twoSetSaved = banking.twoSetPlain - banking.twoSetBanked;
+  // 持ち出した連数を、フェス限で引いた場合と限定で引いた場合で比べる。
+  banking.limitedOtherRate = LIMITED_STAR3_RATE - (NORMAL_PU_RATE * 2);
+  banking.haulFestival = banking.carryPulls * banking.otherStar3Festival;
+  banking.haulLimited = banking.carryPulls * banking.limitedOtherRate;
 
   // 「本命1名を狙い続ける」意味を、開始時の素体0人/1人の2ケースで測る。
   const focusPlans = [
@@ -652,14 +660,15 @@ const PU_TAB_LEAD = {
 };
 
 function retreatSection(result) {
-  const tabs = TARGETS.map((target) => `<button type="button" role="tab" id="tab-${target}pu" aria-controls="pu-panel" aria-selected="${target === 2}" tabindex="${target === 2 ? 0 : -1}" data-pu="${target}">${PU_TAB_NAMES[target]}</button>`).join('');
+  const tabs = [...TARGETS.map((target) => `<button type="button" role="tab" id="tab-${target}pu" aria-controls="pu-panel" aria-selected="${target === 2}" tabindex="${target === 2 ? 0 : -1}" data-pu="${target}">${PU_TAB_NAMES[target]}</button>`),
+    '<button type="button" role="tab" id="tab-bankpu" aria-controls="pu-panel" aria-selected="false" tabindex="-1" data-pu="bank">99連</button>'].join('');
   const panels = TARGETS.map((target) => {
     const withSpook = result.retreat[target].withSpook;
     const without = result.retreat[target].withoutSpook;
     const savedPulls = without.expectedPulls - withSpook.expectedPulls;
     const lostLetters = without.letters - withSpook.letters;
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}素体がそろった時点で撤退する前提です。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>すべて指名で引く</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜けを含む実際</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜けで決着した割合</th><td colspan="2" data-label="すり抜けで決着">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。</p><p class="note">相方が素体確保で十分な性能なら、これは早く終わって得をした話です。相方にも固有2が要るなら、撤退せず指名を続けることになります。そのときは先に素体を持っているぶん、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になり、取り逃した100文字はそこで戻ります。</p></div>`;
-  }).join('');
+  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。限定募集は2名で1セットなので、その2名をそろえるまでで比べます。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>2名そろえるまで</th><th>期待募集回数</th><th>必要な石</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待募集回数">${result.banking.twoSetPlain.toFixed(1)}連</td><td data-label="必要な石">${stone(result.banking.twoSetPlain)}石</td></tr><tr><th>チャージ99から</th><td data-label="期待募集回数" class="best">${result.banking.twoSetBanked.toFixed(1)}連</td><td data-label="必要な石" class="best">${stone(result.banking.twoSetBanked)}石</td></tr><tr><th>差</th><td data-label="期待募集回数">−${result.banking.twoSetSaved.toFixed(1)}連</td><td data-label="必要な石">−${stone(result.banking.twoSetSaved)}石</td></tr></tbody></table><p><b>純粋に${result.banking.twoSetSaved.toFixed(0)}連分、安くなります。</b></p><h3>その代わり99連を先に引く</h3><p>短縮された${result.banking.twoSetSaved.toFixed(0)}連を差し引くと、取り返せない持ち出しは <b>${result.banking.carryPulls.toFixed(0)}連</b>（${stone(result.banking.carryPulls)}石）です。この${result.banking.carryPulls.toFixed(0)}連を溝に捨てる代わりに、<b>星3生徒がランダムで${result.banking.haulFestival.toFixed(2)}名</b>お迎えできます。</p><h3>それは得なのか</h3><p>同じ${result.banking.carryPulls.toFixed(0)}連を次の限定募集で引いても、PU以外の星3は拾えます。どちらが多いかだけで判定できます。</p><p class="formula">${result.banking.carryPulls.toFixed(0)}連 × ${pct(result.banking.otherStar3Festival)}（フェス限） = ${result.banking.haulFestival.toFixed(2)}名 ＞ ${result.banking.carryPulls.toFixed(0)}連 × ${pct(result.banking.limitedOtherRate)}（限定） = ${result.banking.haulLimited.toFixed(2)}名</p><p class="note">差は ${(result.banking.haulFestival - result.banking.haulLimited).toFixed(2)}名 で<b>得</b>。ただし貯めている途中で指名した生徒を引き当てるとチャージは0に戻るため、99連を引ききってもチャージが残るのは <b>${pct(result.banking.survivalToBank)}</b> です。</p></div>`;
   return `<section class="panel"><h2>新仕様は全員そろえるまで降りられない</h2><p>呼出チャージには交換がないので、狙った生徒は順番に指名して引き当てるしかありません。まず素体をそろえるまでの期待値を置き、そこにすり抜けが挟まると何が変わるかを見ます。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
@@ -759,7 +768,7 @@ function better(value, rival, preferHigh) {
 
 const FESTIVAL_TAB_JS = "const puTabs=[...document.querySelectorAll('[data-pu]')],puPanels=[...document.querySelectorAll('[data-pu-panel]')];const selectPu=value=>{puTabs.forEach(tab=>{const on=tab.dataset.pu===value;tab.setAttribute('aria-selected',String(on));tab.tabIndex=on?0:-1});puPanels.forEach(panel=>{panel.hidden=panel.dataset.puPanel!==value});document.getElementById('pu-panel').setAttribute('aria-labelledby','tab-'+value+'pu')};puTabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectPu(tab.dataset.pu));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();let next=index;if(event.key==='ArrowLeft')next=(index-1+puTabs.length)%puTabs.length;if(event.key==='ArrowRight')next=(index+1)%puTabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=puTabs.length-1;puTabs[next].focus();selectPu(puTabs[next].dataset.pu)})});";
 
-const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:600;margin:0 0 8px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}details summary{cursor:pointer;font-weight:600;font-size:15px;padding:2px 0;color:var(--muted)}details[open] summary{margin-bottom:8px;color:var(--on)}summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.tabs{display:flex;gap:4px;margin:0 0 12px}.tabs button{flex:1 1 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--raised);color:var(--muted);font:500 15px/1.2 system-ui,sans-serif;cursor:pointer}.tabs button[aria-selected="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--on)}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}.nav{align-items:flex-end;justify-content:space-between}.nav-pages,.language-switch{display:flex;gap:16px}.language-switch{gap:4px;padding:0 0 8px;color:var(--muted);font-size:12px}.language-switch a,.language-switch span{padding:0 4px}.language-switch [aria-current="true"]{color:var(--on);font-weight:700}@media(max-width:700px){table{display:block}colgroup{display:none}thead{display:none}tbody{display:block}tbody+tbody th,tbody+tbody td{border-top:0}tr{display:block;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:0 0 8px}tbody th{display:block;border:0;border-bottom:1px solid var(--border);padding:0 0 5px;margin:0 0 5px;text-align:left;font-weight:700;white-space:normal}td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0;padding:3px 0;text-align:right}td:before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:500;text-align:left;flex:0 0 auto}td b,td small{display:inline;white-space:nowrap}td small{margin:0 0 0 4px}}';
+const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:600;margin:0 0 8px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}.formula{font-variant-numeric:tabular-nums;background:var(--accent-subtle);border-radius:6px;padding:10px 12px;font-size:15px}details summary{cursor:pointer;font-weight:600;font-size:15px;padding:2px 0;color:var(--muted)}details[open] summary{margin-bottom:8px;color:var(--on)}summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.tabs{display:flex;gap:4px;margin:0 0 12px}.tabs button{flex:1 1 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--raised);color:var(--muted);font:500 15px/1.2 system-ui,sans-serif;cursor:pointer}.tabs button[aria-selected="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--on)}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}.nav{align-items:flex-end;justify-content:space-between}.nav-pages,.language-switch{display:flex;gap:16px}.language-switch{gap:4px;padding:0 0 8px;color:var(--muted);font-size:12px}.language-switch a,.language-switch span{padding:0 4px}.language-switch [aria-current="true"]{color:var(--on);font-weight:700}@media(max-width:700px){table{display:block}colgroup{display:none}thead{display:none}tbody{display:block}tbody+tbody th,tbody+tbody td{border-top:0}tr{display:block;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:0 0 8px}tbody th{display:block;border:0;border-bottom:1px solid var(--border);padding:0 0 5px;margin:0 0 5px;text-align:left;font-weight:700;white-space:normal}td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0;padding:3px 0;text-align:right}td:before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:500;text-align:left;flex:0 0 auto}td b,td small{display:inline;white-space:nowrap}td small{margin:0 0 0 4px}}';
 
 const GITHUB_LINK = '<a class="repo-link" href="https://github.com/miyabisun/arona-gacha-calc" aria-label="GitHubリポジトリを開く"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.4 3.5 6.5 6.8 7A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/></svg><span>miyabisun/arona-gacha-calc</span></a>';
 
@@ -773,7 +782,6 @@ ${retreatSection(result)}
 <section class="panel"><h2>新仕様の言い分：石が安く済む</h2><p>ここまでは同じ連数を積んだ場合の話でした。新仕様の主張は<b>そもそも積む石が少なくて済む</b>ことで、これは事実です。素体をそろえた時点で降りられるなら、浮いた石はそのまま次の限定・恒常募集へ回せます。</p><h3>素体をそろえるまでの費用</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result).join('')}</tbody></table><p class="note">2名なら1,441石、12連ぶん安く上がります。ただし差は狙う人数が増えるほど縮み、<b>4名では逆に呼出ポイントのほうが268石安くなります</b>。新仕様の強みは、狙う人数が少ないときに限って効きます。</p><h3>同じ石を積んだ場合に持ち帰る文字</h3><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result).join('')}</tbody></table><p class="note">同じ石を積むなら、旧仕様のほうが400連で64〜70文字多く持ち帰ります。浮く石の12連ぶんを恒常募集へ回しても星3は0.36人ぶんで、64文字は固有2の19%にあたります。この二つを同じ物差しで比べることはできません。それでも、降りられる代わりに毎回この差を払い続けることになります。</p></section>
 <section class="panel"><h2>旧仕様なら上振れを選びにいける</h2><p>先に断っておくと、<b>2名を狙うだけなら、どちらの仕様でも大差はありません</b>。呼出ポイントはほぼ確実に200連ぶんの石を持っていかれますが、そのかわり<b>${(result.twoPuBranch.bothArrived * 100).toFixed(1)}%</b>の確率で交換枠がまるごと余ります。余った枠は100文字、既所持の制服ネルへ回せば200文字。差はその程度です。</p><p>違いがはっきりするのは3名以上を狙うときです。呼出ポイントは<b>水着イロハを指名し続けたまま、200連ごとの交換枠を使い分けられます</b>。この自由度が新仕様には存在しません。</p><p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p><p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p><h3>400連・交換2枠の使い道</h3><table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>交換枠の流し先</th><th>持ち帰る文字</th><th>イロハ固有2</th><th>イブキ確保</th></tr></thead><tbody>${exchangePlanRows(result).join('')}</tbody></table><p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p><h3>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h3>${jointTable(result, 400, 'subThenMain')}<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p></section>
 <section class="panel"><h2>1連の重さは違うが、決め手にはならない</h2><p>ここまで石は「何連引けるか」としてだけ数えてきました。ですが1連から返ってくるものも期間で違います。フェス限定募集は星3が6%へ倍化するので、同じ10連でも手元に残る欠片が増えます。</p><table><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><thead><tr><th>引いた量</th><th>平常時</th><th>フェス限期間</th></tr></thead><tbody><tr><th>10連（1,200石）</th><td data-label="平常時">${result.shardYield.perPullNormal * 10}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perPullFestival * 10}欠片</td></tr><tr><th>200連（24,000石）</th><td data-label="平常時">${result.shardYield.perBlockNormal.toLocaleString('ja-JP')}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perBlockFestival.toLocaleString('ja-JP')}欠片</td></tr><tr><th>200連あたりの差</th><td colspan="2" data-label="差">${result.shardYield.blockGain}欠片（文字に直して約${result.shardYield.blockGainLetters}文字）</td></tr></tbody></table><p class="note">この差は指名にも交換にも関係なく、引いた回数だけで付いてきます。ただし<b>拾った欠片がそのまま戦力になるわけではありません</b>。多くの生徒は育成対象にならず、育てる生徒は先に欠片交換で固有2まで上げ終えています。実際に凸へ回せるのは多く見ても1割程度で、しかも安い交換段は使い切っているので5欠片で1文字です。</p><p class="note">そう割り引くと、200連あたり<b>${result.shardYield.blockGain}欠片</b>の差は実質<b>${result.shardYield.blockGainLetters}文字</b>ぶんにしかなりません。フェス限期間に引くほうが得なのは確かですが、<b>仕様の優劣を動かすほどの差ではありません</b>。</p><p class="note">欠片の枚数も、使える割合の1割も、体感からの概算です。星2・星1の内訳が確定すれば数字は動きますが、名目の欠片数ほどには効かないという結論は変わりません。</p></section>
-<section class="panel"><h2>99連を次の限定募集へ持ち越す</h2><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p><p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>${result.banking.guaranteedWithinBanked}連目</b>には199の確定枠へ届きます。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>1人を確保するまで</th><th>期待</th><th>最大</th><th>短縮</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待">${result.banking.expectedPullsPlain.toFixed(1)}連</td><td data-label="最大">${result.banking.guaranteedWithinPlain}連</td><td data-label="短縮">—</td></tr><tr><th>チャージ99から</th><td data-label="期待" class="best">${result.banking.expectedPullsBanked.toFixed(1)}連</td><td data-label="最大" class="best">${result.banking.guaranteedWithinBanked}連</td><td data-label="短縮" class="best">−${result.banking.savedPulls.toFixed(1)}連</td></tr></tbody></table><p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p><p class="note">同じ99連なら、星3が倍のフェス限期間に引くほうが欠片は約<b>${result.shardYield.bankGain}枚</b>多く残ります。もっとも実際に凸へ回せる分に割り引けば<b>${result.shardYield.bankGainLetters}文字</b>ほどで、これは判断を変える大きさではありません。</p><h3>闇鍋としての価値</h3><p>欠片とは別の見方もできます。PU以外の星3が出る率は、平常時が <b>${pct(result.banking.otherStar3Normal)}</b> なのに対しフェス限期間は <b>${pct(result.banking.otherStar3Festival)}</b>。同じ99連でも、フェス限のほうが恒常生徒を <b>${result.banking.extraStar3PerBank.toFixed(2)}人</b> 多く連れて帰る計算になります。</p><p class="note">チャージ99を持ち込めば次の募集が ${result.banking.savedPulls.toFixed(1)}連 短くなるので、99連のうち取り返せない持ち出しは <b>${result.banking.carryPulls.toFixed(1)}連</b>、${Math.round(result.banking.carryStones).toLocaleString('ja-JP')}石です。1万円で8,000石買える計算なら約${Math.round(result.banking.carryStones / 8000 * 10000).toLocaleString('ja-JP')}円。<b>その持ち出しで恒常星3を2人引いた</b>と読み替えれば、闇鍋としては割に合う買い物です。</p><p class="note">この2人は狙って出せるものではなく、育成対象になるかも分かりません。数字はあくまで「引かされた分の埋め合わせがどれくらいか」の目安です。</p><p class="note">ただし、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>${pct(result.banking.survivalToBank)}</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p></section>
 <section class="panel"><h2>実際にはどこで降りるのか</h2><p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p><h3>2PU（水着イロハ・水着イブキ）</h3><table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 2)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 2).join('')}</tbody></table><p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。</p><p class="note">どちらの場合も期待文字は300前後にとどまります。イブキが素体確保で十分な性能なら、これで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p><h3>3PU（水着イロハ・水着イブキ・制服ネル）</h3><table><colgroup><col style="width:28%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:15%"><col style="width:15%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 3)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 3).join('')}</tbody></table><p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p><h3>4PU（対象4名すべて）</h3><table><colgroup><col style="width:26%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 4)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 4).join('')}</tbody></table><p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p><p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
 <script src="js/festival.js" defer></script></body></html>`;
@@ -889,27 +897,10 @@ const ENGLISH_REPLACEMENTS = [
   ['<th>200連（24,000石）</th>', '<th>200 pulls (24,000 Pyroxene)</th>'],
   ['<th>200連あたりの差</th>', '<th>Gap per 200 pulls</th>'],
   ['data-label="差"', 'data-label="Gap"'],
-  ['連目</b>', '</b>'],
   ['data-label="平常時"', 'data-label="Normal"'],
   ['data-label="フェス限期間"', 'data-label="Festival"'],
-  ['<h2>99連を次の限定募集へ持ち越す</h2>', '<h2>Carrying 99 pulls into the next limited banner</h2>'],
-  [
-    '<p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p>',
-    '<p>Recruitment Charge carries over within a banner category. Charge built on a festival banner carries into <b>the next limited or festival banner</b>, while charge from the standard banner carries into the next standard banner.</p>',
-  ],
-  ['<th>1人を確保するまで</th>', '<th>To secure one student</th>'],
-  ['<th>期待</th>', '<th>Expected</th>'],
-  ['<th>最大</th>', '<th>Worst case</th>'],
-  ['<th>短縮</th>', '<th>Saved</th>'],
   ['<th>チャージ0から</th>', '<th>From charge 0</th>'],
   ['<th>チャージ99から</th>', '<th>From charge 99</th>'],
-  ['data-label="期待"', 'data-label="Expected"'],
-  ['data-label="最大"', 'data-label="Worst case"'],
-  ['data-label="短縮"', 'data-label="Saved"'],
-  [
-    '<p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p>',
-    '<p class="note">Carried-over charge only helps with the first student, so the saving is the same no matter how many students you target. The pull counts above exclude the 99 pulls spent building the charge.</p>',
-  ],
 
   ['<th>交換枠の流し先</th>', '<th>Where the exchanges go</th>'],
   ['<th>イブキ確保</th>', '<th>Ibuki owned</th>'],
@@ -950,78 +941,40 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">欠片の枚数も、使える割合の1割も、体感からの概算です。星2・星1の内訳が確定すれば数字は動きますが、名目の欠片数ほどには効かないという結論は変わりません。</p>',
     '<p class="note">Both the shard counts and the one-tenth usable share are estimates from play. Pinning down the 2★ and 1★ breakdown will move the numbers, but not the conclusion: the nominal shard total overstates what you actually gain.</p>',
   ],
-  [
-    '<p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>',
-    '<p>That makes a plan possible: <b>stop at 99 pulls</b> during the festival banner, then open the next limited banner already at charge 99. The 50% guaranteed slot lands on the very first pull, and even if it misses, the charge-199 guarantee arrives on pull <b>',
-  ],
-  [
-    '</b>には199の確定枠へ届きます。</p>',
-    '</b>.</p>',
-  ],
-  [
-    '<p class="note">同じ99連なら、星3が倍のフェス限期間に引くほうが欠片は約<b>',
-    '<p class="note">Given the same 99 pulls, spending them inside the festival leaves roughly <b>',
-  ],
-  [
-    '枚</b>多く残ります。もっとも実際に凸へ回せる分に割り引けば<b>',
-    ' more shards</b>. Discounted to what actually reaches a build, though, that is about <b>',
-  ],
-  [
-    '文字</b>ほどで、これは判断を変える大きさではありません。</p>',
-    ' Eleph</b> — not enough to sway the decision.</p>',
-  ],
-  ['<h3>闇鍋としての価値</h3>', '<h3>What the blind pulls are worth</h3>'],
-  [
-    '<p>欠片とは別の見方もできます。PU以外の星3が出る率は、平常時が <b>',
-    '<p>There is another way to look at it. The rate for 3★ students outside the pickup runs at <b>',
-  ],
-  [
-    '</b> なのに対しフェス限期間は <b>',
-    '</b> normally, against <b>',
-  ],
-  [
-    '</b>。同じ99連でも、フェス限のほうが恒常生徒を <b>',
-    '</b> during the festival. The same 99 pulls therefore bring home <b>',
-  ],
-  [
-    '人</b> 多く連れて帰る計算になります。</p>',
-    ' more</b> permanent students inside the festival.</p>',
-  ],
-  [
-    '<p class="note">チャージ99を持ち込めば次の募集が ',
-    '<p class="note">Carrying charge 99 forward shortens the next banner by ',
-  ],
-  [
-    '連 短くなるので、99連のうち取り返せない持ち出しは <b>',
-    ' pulls, so the part of those 99 you never get back is <b>',
-  ],
-  [
-    '連</b>、',
-    ' pulls</b>, or ',
-  ],
-  [
-    '石です。1万円で8,000石買える計算なら約',
-    ' Pyroxene. At 8,000 Pyroxene per 10,000 yen that is roughly ',
-  ],
-  [
-    '円。<b>その持ち出しで恒常星3を2人引いた</b>と読み替えれば、闇鍋としては割に合う買い物です。</p>',
-    ' yen. Read as <b>two permanent 3★ students bought with that outlay</b>, the blind pulls are not a bad deal.</p>',
-  ],
-  [
-    '<p class="note">この2人は狙って出せるものではなく、育成対象になるかも分かりません。数字はあくまで「引かされた分の埋め合わせがどれくらいか」の目安です。</p>',
-    '<p class="note">Those two cannot be aimed at, and there is no telling whether either will ever be built. The figure is only a gauge of how much the forced pulls give back.</p>',
-  ],
-  [
-    '<p class="note">ただし、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>',
-    '<p class="note">Pulling the student you selected resets the charge to 0, so the plan only survives half the time: the chance of still holding the charge after 99 pulls is <b>',
-  ],
-  [
-    '</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p>',
-    '</b>. Banking all the way to 199 to finish the next banner in a single pull fails far more often — about 87.5% lose the charge before reaching it.</p>',
-  ],
   ['欠片</td>', ' shards</td>'],
   ['欠片（文字に直して約', ' shards (about '],
   ['文字）</td>', ' Eleph)</td>'],
+  ['data-pu="bank">99連</button>', 'data-pu="bank">Banking</button>'],
+  [
+    '<p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。限定募集は2名で1セットなので、その2名をそろえるまでで比べます。</p>',
+    '<p>Recruitment Charge carries over within a banner category. Stop at 99 pulls on the festival banner and <b>the next limited banner opens at charge 99</b>. Limited banners come two students at a time, so the comparison runs until both are owned.</p>',
+  ],
+  ['<th>2名そろえるまで</th>', '<th>To own both</th>'],
+  ['<th>必要な石</th>', '<th>Pyroxene needed</th>'],
+  ['data-label="必要な石"', 'data-label="Pyroxene needed"'],
+  ['<p><b>純粋に', '<p><b>That is a straight saving of '],
+  ['連分、安くなります。</b></p>', ' pulls.</b></p>'],
+  ['<h3>その代わり99連を先に引く</h3>', '<h3>The 99 pulls you spend first</h3>'],
+  ['<p>短縮された', '<p>Netting out the '],
+  ['連を差し引くと、取り返せない持ち出しは <b>', ' pulls you save, the outlay you never recover is <b>'],
+  ['連</b>（', ' pulls</b> ('],
+  ['石）です。この', ' Pyroxene). Throw those '],
+  ['連を溝に捨てる代わりに、<b>星3生徒がランダムで', ' pulls away and what comes back is <b>'],
+  ['名</b>お迎えできます。</p>', ' random 3★ students</b>.</p>'],
+  ['<h3>それは得なのか</h3>', '<h3>Is that a win?</h3>'],
+  [
+    '<p>同じ46連を次の限定募集で引いても、PU以外の星3は拾えます。どちらが多いかだけで判定できます。</p>',
+    '<p>The same 46 pulls on the next limited banner would also turn up 3★ students outside the pickup. Whichever yields more settles it.</p>',
+  ],
+  ['（フェス限） = ', ' (festival) = '],
+  ['名 ＞ ', ' students > '],
+  ['（限定） = ', ' (limited) = '],
+  ['名</p>', ' students</p>'],
+  ['<p class="note">差は ', '<p class="note">A margin of '],
+  ['名 で<b>得</b>。ただし貯めている途中で指名した生徒を引き当てるとチャージは0に戻るため、99連を引ききってもチャージが残るのは <b>',
+   ' students, so it <b>pays off</b>. Pulling the student you selected resets the charge to 0, though, so the chance of still holding it after 99 pulls is <b>'],
+  ['</b> です。</p>', '</b>.</p>'],
+  ['連 × ', ' pulls x '],
   ['<h2>実際にはどこで降りるのか</h2>', '<h2>Where the run actually ends</h2>'],
   [
     '<p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p>',

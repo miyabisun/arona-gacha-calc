@@ -6901,7 +6901,13 @@
     "carryStones": 5516.775159946462,
     "otherStar3Normal": 0.023,
     "otherStar3Festival": 0.044,
-    "extraStar3PerBank": 2.0789999999999997
+    "extraStar3PerBank": 2.0789999999999997,
+    "twoSetPlain": 180.14453799767531,
+    "twoSetBanked": 127.11766433056249,
+    "twoSetSaved": 53.026873667112824,
+    "limitedOtherRate": 0.016,
+    "haulFestival": 2.022817558647036,
+    "haulLimited": 0.735570021326195
   },
   "audit": {
     "maxMassError": 7.882583474838611e-15
