@@ -8,6 +8,7 @@ const {
   runFestivalDp,
   chargeHitRate,
   chargeResidual,
+  shardsToLetters,
   SPOOK_EACH_RATE,
   MAX_PULLS,
   TARGETS,
@@ -99,13 +100,47 @@ test('日英のフェス限ページとページ対応の言語切替を生成�
   assert.match(english, /rel="alternate" hreflang="x-default"/);
   assert.doesNotMatch(english, /[ぁ-んァ-ヶ一-龠]/);
 
-  // 到達率・期待回数・99連の3表と、狙う人数ごとに区切った本体。
   for (const html of [japanese, english]) {
-    assert.equal((html.match(/<table>/g) ?? []).length, 3);
-    assert.equal((html.match(/<colgroup>/g) ?? []).length, 3);
-    assert.equal((html.match(/<tbody>/g) ?? []).length, TARGETS.length + 2);
+    // すべての表が列幅を固定し、横スクロールに頼らないこと。
+    const tables = (html.match(/<table>/g) ?? []).length;
+    assert.equal((html.match(/<colgroup>/g) ?? []).length, tables);
     assert.doesNotMatch(html, /table-wrap|overflow-x/);
   }
+});
+
+test('文字は経路ごとの報酬を積み上げた値になる', () => {
+  // 1名だけ狙えば、すり抜け待ちの相手がいないので初回ボーナスと重複だけが積まれる。
+  const { curves } = runFestivalDp(1, { useCharge: false, useExchange: false });
+  assert.ok(Math.abs(curves.letters[1] - 0.007 * 100) < 1e-12);
+  assert.equal(curves.shards[1], 0);
+  // 200連の交換は未所持なら初回ボーナス100文字、既所持なら重複100＋ボーナス100＋50欠片。
+  const exchanged = runFestivalDp(1, { useCharge: false, useExchange: true });
+  assert.ok(exchanged.curves.letters[200] > curves.letters[200]);
+  assert.ok(exchanged.curves.allBonus[200] >= 1 - 1e-12);
+});
+
+test('文字と欠片は単調非減少で、呼出ポイントが上回る', () => {
+  const result = calculateFestival();
+  for (const target of TARGETS) {
+    const charge = result.scenarios.charge[target];
+    const point = result.scenarios.point[target];
+    for (let pull = 1; pull <= MAX_PULLS; pull += 1) {
+      assert.ok(charge.letters[pull] >= charge.letters[pull - 1] - 1e-12);
+      assert.ok(point.shards[pull] >= point.shards[pull - 1] - 1e-12);
+    }
+    // 自引きと交換が独立に走るぶん、200連以降は呼出ポイントの文字が多い。
+    for (const pull of [200, 400, 600]) {
+      assert.ok(point.letters[pull] > charge.letters[pull], `${target}人 ${pull}連で逆転`);
+    }
+  }
+});
+
+test('欠片は安い段から順に文字へ換算する', () => {
+  assert.equal(shardsToLetters(0), 0);
+  assert.equal(shardsToLetters(20), 20);        // 1:1 の20文字ぶん
+  assert.equal(shardsToLetters(50), 35);        // 20文字 + 残り30欠片で15文字
+  assert.equal(shardsToLetters(200), 80);       // 1:4 の段まで使い切る
+  assert.equal(shardsToLetters(300), 100);      // 以降は5欠片で1文字
 });
 
 test('生成ページの数値が計算結果と一致する', () => {

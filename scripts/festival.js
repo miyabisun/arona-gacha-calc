@@ -19,6 +19,22 @@ const NORMAL_PU_RATE = 0.007;
 const FES_STAR3_RATE = 0.06;
 const LIMITED_STAR3_RATE = 0.03;
 const BANK_PULLS = 99;
+// 文字(エレフ)の入手。PU枠は重複でも100、すり抜け枠の重複は30。
+const BONUS_LETTERS = 100;
+const PU_DUPLICATE_LETTERS = 100;
+const SPOOK_DUPLICATE_LETTERS = 30;
+const DUPLICATE_SHARDS = 50;
+// 凸コスト(累積)。星3を出発点として、星4→固有1→固有2→固有3→固有4。
+const MILESTONE_LETTERS = [
+  { name: '星4', cost: 100 },
+  { name: '固有1', cost: 220 },
+  { name: '固有2', cost: 340 },
+  { name: '固有3', cost: 520 },
+  { name: '固有4', cost: 720 },
+];
+// ショップの欠片交換レート。最初の20文字は1:1、以降20文字ごとに1段階ずつ重くなる。
+const SHARD_TIERS = [{ letters: 20, rate: 1 }, { letters: 20, rate: 2 }, { letters: 20, rate: 3 }, { letters: 20, rate: 4 }];
+const SHARD_TAIL_RATE = 5;
 const SPOOK_TOTAL_RATE = 0.009;
 const SPOOK_POOL = 9;
 const SPOOK_EACH_RATE = SPOOK_TOTAL_RATE / SPOOK_POOL;
@@ -53,18 +69,30 @@ function stateKey(bonus, spare, charge) {
  */
 function applyExchange(states, target) {
   const next = new Map();
+  let letters = 0;
+  let shards = 0;
   for (const [key, mass] of states) {
     const [bonus, spare, charge] = key.split(':').map(Number);
-    if (bonus >= target) {
-      next.set(key, (next.get(key) ?? 0) + mass);
-      continue;
-    }
     const baseless = target - bonus - spare;
-    const nextSpare = baseless > 0 ? spare : spare - 1;
-    const nextKey = stateKey(bonus + 1, nextSpare, charge);
-    next.set(nextKey, (next.get(nextKey) ?? 0) + mass);
+    if (baseless > 0) {
+      // 未所持を引き取る。素体が増え、初回PUボーナスが付く。
+      letters += mass * BONUS_LETTERS;
+      const nextKey = stateKey(bonus + 1, spare, charge);
+      next.set(nextKey, (next.get(nextKey) ?? 0) + mass);
+    } else if (spare > 0) {
+      // すり抜けで素体だけ持っていた生徒。重複分と未消費のボーナスがまとめて入る。
+      letters += mass * (PU_DUPLICATE_LETTERS + BONUS_LETTERS);
+      shards += mass * DUPLICATE_SHARDS;
+      const nextKey = stateKey(bonus + 1, spare - 1, charge);
+      next.set(nextKey, (next.get(nextKey) ?? 0) + mass);
+    } else {
+      // 全員回収済み。既所持を引き取って重複に変える。
+      letters += mass * PU_DUPLICATE_LETTERS;
+      shards += mass * DUPLICATE_SHARDS;
+      next.set(key, (next.get(key) ?? 0) + mass);
+    }
   }
-  return next;
+  return { states: next, letters, shards };
 }
 
 function emptyCurves() {
@@ -73,6 +101,8 @@ function emptyCurves() {
     allBonus: Array(MAX_PULLS + 1).fill(0),
     expectedBase: Array(MAX_PULLS + 1).fill(0),
     expectedBonus: Array(MAX_PULLS + 1).fill(0),
+    letters: Array(MAX_PULLS + 1).fill(0),
+    shards: Array(MAX_PULLS + 1).fill(0),
   };
 }
 
@@ -84,6 +114,8 @@ function runFestivalDp(target, { useCharge, useExchange, initialCharge = 0 }) {
   let states = new Map([[stateKey(0, 0, useCharge ? initialCharge : 0), 1]]);
   const curves = emptyCurves();
   let maxMassError = 0;
+  let letters = 0;
+  let shards = 0;
 
   for (let pull = 1; pull <= MAX_PULLS; pull += 1) {
     const next = new Map();
@@ -91,43 +123,91 @@ function runFestivalDp(target, { useCharge, useExchange, initialCharge = 0 }) {
 
     for (const [key, mass] of states) {
       const [bonus, spare, charge] = key.split(':').map(Number);
-      if (bonus === target) {
-        add(key, mass);
-        continue;
-      }
       const hit = useCharge ? chargeHitRate(charge) : NORMAL_PU_RATE;
       const residual = useCharge ? chargeResidual(charge) : 1;
       // 素体を持たない生徒のうち、指名中の1人はすり抜けプールに含まれない。
       const baseless = target - bonus - spare;
       const spook = residual * Math.max(0, baseless - 1) * SPOOK_EACH_RATE;
-      const miss = 1 - hit - spook;
+      // 指名中の1人を除いた「すでに素体を持つ対象生徒」が重なると重複報酬になる。
+      const ownedInPool = Math.max(0, (bonus + spare) - (baseless > 0 ? 0 : 1));
+      const spookDuplicate = residual * ownedInPool * SPOOK_EACH_RATE;
+      const miss = 1 - hit - spook - spookDuplicate;
       const nextCharge = useCharge ? charge + 1 : 0;
 
+      if (spookDuplicate > 0) {
+        letters += mass * spookDuplicate * SPOOK_DUPLICATE_LETTERS;
+        shards += mass * spookDuplicate * DUPLICATE_SHARDS;
+        add(stateKey(bonus, spare, nextCharge), mass * spookDuplicate);
+      }
+
       if (hit > 0) {
-        const nextSpare = baseless > 0 ? spare : spare - 1;
-        add(stateKey(bonus + 1, nextSpare, 0), mass * hit);
+        const gained = mass * hit;
+        if (baseless > 0) {
+          // 未所持を指名。素体と初回PUボーナスを得る。
+          letters += gained * BONUS_LETTERS;
+          add(stateKey(bonus + 1, spare, 0), gained);
+        } else if (spare > 0) {
+          // すり抜けで素体だけ持っていた生徒。重複分と未消費のボーナスが同時に入る。
+          letters += gained * (PU_DUPLICATE_LETTERS + BONUS_LETTERS);
+          shards += gained * DUPLICATE_SHARDS;
+          add(stateKey(bonus + 1, spare - 1, 0), gained);
+        } else {
+          // 全員分のボーナスを回収済み。以後は重複を積むだけ。
+          letters += gained * PU_DUPLICATE_LETTERS;
+          shards += gained * DUPLICATE_SHARDS;
+          add(stateKey(bonus, spare, 0), gained);
+        }
       }
       if (spook > 0) add(stateKey(bonus, spare + 1, nextCharge), mass * spook);
       if (miss > 0) add(stateKey(bonus, spare, nextCharge), mass * miss);
     }
 
-    states = useExchange && pull % EXCHANGE_INTERVAL === 0
-      ? applyExchange(next, target)
-      : next;
+    if (useExchange && pull % EXCHANGE_INTERVAL === 0) {
+      const exchanged = applyExchange(next, target);
+      states = exchanged.states;
+      letters += exchanged.letters;
+      shards += exchanged.shards;
+    } else {
+      states = next;
+    }
 
     let total = 0;
     for (const [key, mass] of states) {
       const [bonus, spare] = key.split(':').map(Number);
       total += mass;
-      if (bonus + spare === target) curves.allBase[pull] += mass;
-      if (bonus === target) curves.allBonus[pull] += mass;
-      curves.expectedBase[pull] += mass * (bonus + spare);
-      curves.expectedBonus[pull] += mass * bonus;
+      // 目標人数に達した質量は以後も残り続けるので、到達率は最大値で積み上げる。
+      if (bonus + spare >= target) curves.allBase[pull] += mass;
+      if (bonus >= target) curves.allBonus[pull] += mass;
+      curves.expectedBase[pull] += mass * Math.min(bonus + spare, target);
+      curves.expectedBonus[pull] += mass * Math.min(bonus, target);
     }
+    curves.allBase[pull] = Math.max(curves.allBase[pull], curves.allBase[pull - 1]);
+    curves.allBonus[pull] = Math.max(curves.allBonus[pull], curves.allBonus[pull - 1]);
+    curves.letters[pull] = letters;
+    curves.shards[pull] = shards;
     maxMassError = Math.max(maxMassError, Math.abs(total - 1));
   }
 
   return { curves, maxMassError };
+}
+
+/** 欠片を文字へ換算する。安い段から順に使い、余りは切り捨てる。 */
+function shardsToLetters(shards) {
+  let remaining = shards;
+  let gained = 0;
+  for (const tier of SHARD_TIERS) {
+    const affordable = Math.min(tier.letters, Math.floor(remaining / tier.rate));
+    gained += affordable;
+    remaining -= affordable * tier.rate;
+    if (affordable < tier.letters) return gained;
+  }
+  return gained + Math.floor(remaining / SHARD_TAIL_RATE);
+}
+
+/** 累積確率が p を超える最小の連数。運用上の「どこまで払う覚悟が要るか」を示す。 */
+function percentilePull(curve, p) {
+  for (let pull = 0; pull < curve.length; pull += 1) if (curve[pull] >= p) return pull;
+  return curve.length - 1;
 }
 
 /** 累積分布から期待所要連数を求める。上限までに終わらない質量は上限で打ち切る。 */
@@ -156,6 +236,9 @@ function calculateFestival() {
         ...curves,
         expectedPullsToAllBase: expectedPulls(curves.allBase),
         expectedPullsToAllBonus: expectedPulls(curves.allBonus),
+        // 新仕様は全員そろうまで降りられないので、上振れの重さを分位点で示す。
+        pullsAtPercentile: Object.fromEntries([0.5, 0.75, 0.9, 0.95]
+          .map((p) => [p, percentilePull(curves.allBase, p)])),
       };
     }
     scenarios[scenario.id] = byTarget;
@@ -224,16 +307,54 @@ const TABLE_PULLS = { 2: [200, 400], 3: [200, 400, 600], 4: [400, 600, 800] };
 
 function chartData(result) {
   const trim = (values, max) => values.slice(0, max + 1).map((value) => Number(value.toFixed(5)));
+  const trimLetters = (values, max) => values.slice(0, max + 1).map((value) => Math.round(value));
   return Object.fromEntries(TARGETS.map((target) => {
     const max = CHART_MAX[target];
     return [target, {
       max,
       chargeBase: trim(result.scenarios.charge[target].allBase, max),
-      chargeBonus: trim(result.scenarios.charge[target].allBonus, max),
       pointBase: trim(result.scenarios.point[target].allBase, max),
-      pointBonus: trim(result.scenarios.point[target].allBonus, max),
+      chargeLetters: trimLetters(result.scenarios.charge[target].letters, max),
+      pointLetters: trimLetters(result.scenarios.point[target].letters, max),
     }];
   }));
+}
+
+function letterRows(result) {
+  return TARGETS.map((target) => {
+    const charge = result.scenarios.charge[target];
+    const point = result.scenarios.point[target];
+    const rows = TABLE_PULLS[target].map((pull, index) => {
+      const head = index === 0 ? `<th rowspan="${TABLE_PULLS[target].length}">${target}名</th>` : '';
+      const cell = (row, rival) => `<td><b${better(row.letters[pull], rival.letters[pull], true)}>${Math.round(row.letters[pull])}文字</b><small>＋${Math.round(row.shards[pull])}欠片</small></td>`;
+      const gap = point.letters[pull] - charge.letters[pull];
+      return `<tr>${head}<th class="sub">${pull}連</th>${cell(charge, point)}${cell(point, charge)}<td class="${gap >= 0 ? 'plus' : ''}">${gap >= 0 ? '+' : '−'}${Math.abs(Math.round(gap))}文字</td></tr>`;
+    }).join('');
+    return `<tbody>${rows}</tbody>`;
+  });
+}
+
+function milestoneRows(result) {
+  // 3名を狙った場合の文字を、凸の到達段位に突き合わせる。
+  const charge = result.scenarios.charge[3];
+  const point = result.scenarios.point[3];
+  return MILESTONE_LETTERS.map(({ name, cost }) => {
+    // 上限までに届かない段位は言語に依存しない「—」で示す。
+    const reachPull = (row) => row.letters.findIndex((value) => value >= cost);
+    const show = (pull) => (pull < 0 ? '—' : `${pull}連`);
+    const chargePull = reachPull(charge);
+    const pointPull = reachPull(point);
+    // 早く届いたほうに印を付ける。届かない側は比較から外す。
+    const mark = (mine, rival) => (mine >= 0 && (rival < 0 || mine < rival) ? ' class="best"' : '');
+    return `<tr><th>${name}</th><td>${cost}文字</td><td${mark(chargePull, pointPull)}>${show(chargePull)}</td><td${mark(pointPull, chargePull)}>${show(pointPull)}</td></tr>`;
+  });
+}
+
+function riskRows(result) {
+  return TARGETS.map((target) => {
+    const p = result.scenarios.charge[target].pullsAtPercentile;
+    return `<tr><th>${target}名</th><td>${p['0.5']}連</td><td>${p['0.75']}連</td><td>${p['0.9']}連</td><td>${target * 200}連</td></tr>`;
+  });
 }
 
 /** 差がある場合だけ有利な側へ印を付ける。到達率は高い方、期待回数は少ない方が有利。 */
@@ -270,9 +391,13 @@ const GITHUB_LINK = '<a class="repo-link" href="https://github.com/miyabisun/aro
 
 const FESTIVAL_SCRIPT = `const W=920,H=430,L=58,R=18,T=18,B=42,PW=W-L-R,PH=H-T-B;const modes=[...document.querySelectorAll('[data-mode]')];let target=3;
 function path(values,max){return values.map((value,pull)=>(pull?'L':'M')+(L+pull/max*PW).toFixed(2)+','+(T+(1-value)*PH).toFixed(2)).join(' ')}
-function markup(charge,point,max,label){const ys=[0,.25,.5,.75,1].map(value=>{const y=T+(1-value)*PH;return '<line class="horizontal" x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'"/><text class="y-label" x="'+(L-10)+'" y="'+(y+4)+'">'+(value*100)+'%</text>'}).join(''),xs=Array.from({length:Math.floor(max/50)+1},(_,i)=>i*50).map(pull=>{const x=L+pull/max*PW,major=pull%200===0;return '<line class="'+(major?'major':'minor')+'" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(H-B)+'"/>'+(major?'<text class="x-label" x="'+x+'" y="'+(H-14)+'">'+pull+'</text>':'')}).join('');return '<div class="chart-shell" tabindex="0" aria-label="'+label+'。左右矢印で1連、Page UpとPage Downで10連、HomeとEndで移動できます"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+label+'"><g class="grid">'+ys+xs+'</g><path class="curve point" d="'+path(point,max)+'"/><path class="curve charge" d="'+path(charge,max)+'"/><rect class="hit" x="'+L+'" y="'+T+'" width="'+PW+'" height="'+PH+'"/><circle class="hover-dot point" r="5"/><circle class="hover-dot charge" r="5"/></svg><output class="chart-tip" aria-live="polite"></output></div>'}
-function wire(host,charge,point,max,noun){const shell=host.querySelector('.chart-shell'),svg=shell.querySelector('svg'),hit=shell.querySelector('.hit'),tip=shell.querySelector('.chart-tip'),chargeDot=shell.querySelector('.hover-dot.charge'),pointDot=shell.querySelector('.hover-dot.point');let current=0;const show=pull=>{current=Math.max(0,Math.min(max,pull));const x=L+current/max*PW,chargeY=T+(1-charge[current])*PH,pointY=T+(1-point[current])*PH;for(const [dot,y] of [[chargeDot,chargeY],[pointDot,pointY]]){dot.setAttribute('cx',x);dot.setAttribute('cy',y);dot.style.display='block'}tip.style.display='block';tip.textContent=current+'連 '+noun+'\\n呼出チャージ '+(charge[current]*100).toFixed(2)+'%\\n呼出ポイント '+(point[current]*100).toFixed(2)+'%';const rect=svg.getBoundingClientRect(),pointLeft=x/W*rect.width,pointTop=pointY/H*rect.height,tipWidth=tip.offsetWidth;tip.style.left=Math.max(4,Math.min(rect.width-tipWidth-4,pointLeft+8))+'px';tip.style.top=(pointTop+8)+'px'};const hide=()=>{if(document.activeElement===shell)return;tip.style.display='none';chargeDot.style.display='none';pointDot.style.display='none'};hit.addEventListener('pointermove',event=>{const rect=svg.getBoundingClientRect(),svgX=(event.clientX-rect.left)/rect.width*W;show(Math.round(Math.max(0,Math.min(1,(svgX-L)/PW))*max))});hit.addEventListener('pointerleave',hide);shell.addEventListener('focus',()=>show(current));shell.addEventListener('blur',hide);shell.addEventListener('keydown',event=>{const moves={ArrowLeft:-1,ArrowRight:1,PageUp:10,PageDown:-10};let next=current;if(event.key in moves)next+=moves[event.key];else if(event.key==='Home')next=0;else if(event.key==='End')next=max;else return;event.preventDefault();show(next)})}
-function render(){const series=DATA[target],max=series.max;for(const [id,charge,point,noun] of [['chart-base',series.chargeBase,series.pointBase,'素体'],['chart-bonus',series.chargeBonus,series.pointBonus,'初回PUボーナス']]){const host=document.getElementById(id),label=target+'名の'+noun+'を全員分そろえる累積確率';host.innerHTML=markup(charge,point,max,label);wire(host,charge,point,max,noun)}modes.forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.mode)===target)))}
+const TIERS=[['星4',100],['固有1',220],['固有2',340],['固有3',520],['固有4',720]];
+function markup(charge,point,max,label,scale){const ys=(scale?TIERS.filter(t=>t[1]<=scale).map(t=>[t[1]/scale,t[0]]):[0,.25,.5,.75,1].map(v=>[v,(v*100)+'%'])).map(([value,text])=>{const y=T+(1-value)*PH;return '<line class="horizontal" x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'"/><text class="y-label" x="'+(L-10)+'" y="'+(y+4)+'">'+text+'</text>'}).join(''),xs=Array.from({length:Math.floor(max/50)+1},(_,i)=>i*50).map(pull=>{const x=L+pull/max*PW,major=pull%200===0;return '<line class="'+(major?'major':'minor')+'" x1="'+x+'" y1="'+T+'" x2="'+x+'" y2="'+(H-B)+'"/>'+(major?'<text class="x-label" x="'+x+'" y="'+(H-14)+'">'+pull+'</text>':'')}).join('');return '<div class="chart-shell" tabindex="0" aria-label="'+label+'。左右矢印で1連、Page UpとPage Downで10連、HomeとEndで移動できます"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+label+'"><g class="grid">'+ys+xs+'</g><path class="curve point" d="'+path(point,max)+'"/><path class="curve charge" d="'+path(charge,max)+'"/><rect class="hit" x="'+L+'" y="'+T+'" width="'+PW+'" height="'+PH+'"/><circle class="hover-dot point" r="5"/><circle class="hover-dot charge" r="5"/></svg><output class="chart-tip" aria-live="polite"></output></div>'}
+function wire(host,charge,point,max,noun,scale){const fmt=value=>scale?Math.round(value*scale)+'文字':(value*100).toFixed(2)+'%';const shell=host.querySelector('.chart-shell'),svg=shell.querySelector('svg'),hit=shell.querySelector('.hit'),tip=shell.querySelector('.chart-tip'),chargeDot=shell.querySelector('.hover-dot.charge'),pointDot=shell.querySelector('.hover-dot.point');let current=0;const show=pull=>{current=Math.max(0,Math.min(max,pull));const x=L+current/max*PW,chargeY=T+(1-charge[current])*PH,pointY=T+(1-point[current])*PH;for(const [dot,y] of [[chargeDot,chargeY],[pointDot,pointY]]){dot.setAttribute('cx',x);dot.setAttribute('cy',y);dot.style.display='block'}tip.style.display='block';tip.textContent=current+'連 '+noun+'\\n呼出チャージ '+fmt(charge[current])+'\\n呼出ポイント '+fmt(point[current]);const rect=svg.getBoundingClientRect(),pointLeft=x/W*rect.width,pointTop=pointY/H*rect.height,tipWidth=tip.offsetWidth;tip.style.left=Math.max(4,Math.min(rect.width-tipWidth-4,pointLeft+8))+'px';tip.style.top=(pointTop+8)+'px'};const hide=()=>{if(document.activeElement===shell)return;tip.style.display='none';chargeDot.style.display='none';pointDot.style.display='none'};hit.addEventListener('pointermove',event=>{const rect=svg.getBoundingClientRect(),svgX=(event.clientX-rect.left)/rect.width*W;show(Math.round(Math.max(0,Math.min(1,(svgX-L)/PW))*max))});hit.addEventListener('pointerleave',hide);shell.addEventListener('focus',()=>show(current));shell.addEventListener('blur',hide);shell.addEventListener('keydown',event=>{const moves={ArrowLeft:-1,ArrowRight:1,PageUp:10,PageDown:-10};let next=current;if(event.key in moves)next+=moves[event.key];else if(event.key==='Home')next=0;else if(event.key==='End')next=max;else return;event.preventDefault();show(next)})}
+function render(){const series=DATA[target],max=series.max;const top=Math.max(720,Math.ceil(Math.max(series.chargeLetters[max],series.pointLetters[max])/100)*100);
+const asRatio=values=>values.map(value=>value/top);
+for(const [id,charge,point,noun,scale] of [['chart-letters',asRatio(series.chargeLetters),asRatio(series.pointLetters),'文字',top],['chart-base',series.chargeBase,series.pointBase,'素体',0]]){const host=document.getElementById(id),label=scale?target+'名を狙ったときの期待文字数':target+'名の素体を全員分そろえる累積確率';host.innerHTML=markup(charge,point,max,label,scale);wire(host,charge,point,max,noun,scale)}
+modes.forEach(button=>button.setAttribute('aria-pressed',String(Number(button.dataset.mode)===target)))}
 modes.forEach(button=>button.addEventListener('click',()=>{target=Number(button.dataset.mode);render()}));render();`;
 
 function renderFestivalHtml(result) {
@@ -284,8 +409,12 @@ function renderFestivalHtml(result) {
 ${FESTIVAL_CSS}
 </style></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5フェス限の新旧比較</h1>${GITHUB_LINK}</div><p class="lead">フェス限定募集は星3が6%へ倍化し、指名していないフェス限生徒も出現します。この「すり抜け」で狙っている別の生徒が手に入るため、呼出ポイントの200連区切りが有利になる場面があります。</p></header>
 <section class="panel"><h2>計算に使う前提</h2><ul class="rules"><li>フェス限定募集の星3排出率は <b>${pct(rates.festivalStar3)}</b>。</li><li>指名した1名の排出率は <b>${pct(rates.namedPu)}</b>。呼出チャージではチャージ99で50%、199で100%。</li><li>新旧フェス限10名から指名中の1名を除いた<b>9名</b>が <b>${pct(rates.spookPoolTotal)}</b> を等分し、1名あたり <b>${pct(rates.spookEach)}</b>。</li><li>残る <b>${pct(rates.otherStar3)}</b> は恒常星3で、内訳として記録するだけで計算には使いません。</li><li>初回PUボーナスは<b>指名PUの自引きと呼出ポイント交換</b>でのみ得られます。すり抜けで確保しても付きません。</li><li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li></ul></section>
-<section class="panel"><h2>そろうまでの累積確率</h2><div class="modes" role="group" aria-label="狙う人数">${modes}</div><div class="legend" aria-label="グラフの凡例"><span><i class="charge"></i>呼出チャージ（実線）</span><span><i class="point"></i>呼出ポイント（破線）</span></div><div class="charts"><div><h3>素体をそろえる</h3><div id="chart-base"></div></div><div><h3>初回PUボーナスまでそろえる</h3><div id="chart-bonus"></div></div></div><p class="note">素体はすり抜けでも増えます。初回PUボーナスはすり抜けでは付かないため、指名か交換で確保するまで達成になりません。</p></section>
+<section class="panel"><h2>持ち帰る文字と、そろう確率</h2><div class="modes" role="group" aria-label="狙う人数">${modes}</div><div class="legend" aria-label="グラフの凡例"><span><i class="charge"></i>呼出チャージ（実線）</span><span><i class="point"></i>呼出ポイント（破線）</span></div><div class="charts"><div><h3>期待文字数</h3><div id="chart-letters"></div></div><div><h3>全員の素体がそろう確率</h3><div id="chart-base"></div></div></div><p class="note">左の横線は上から固有4（720文字）、固有3（520）、固有2（340）、固有1（220）、星4（100）です。素体がそろうことはゴールではなく、凸を進める文字がいくつ残ったかが成果になります。</p></section>
+<section class="panel"><h2>区切りごとに持ち帰る文字</h2><table><colgroup><col style="width:14%"><col style="width:14%"><col style="width:26%"><col style="width:26%"><col style="width:20%"></colgroup><thead><tr><th>狙う人数</th><th>連数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead>${letterRows(result).join('')}</table><p class="note">狙う人数を変えても文字数はほとんど動きません。文字は「何人狙ったか」ではなく「何回引き当てたか」で決まるためです。呼出ポイントが一貫して上回るのは、0.7%の自引きと200ptの交換が独立に走り、同じ200連あたりの獲得機会が多いからです（呼出チャージ2.22回に対し呼出ポイント2.40回）。</p></section>
+<section class="panel"><h2>凸のどこまで届くか</h2><table><colgroup><col style="width:22%"><col style="width:22%"><col style="width:28%"><col style="width:28%"></colgroup><thead><tr><th>到達段位</th><th>必要文字</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead><tbody>${milestoneRows(result).join('')}</tbody></table><p class="note">3名を狙った場合に、対象3名分を合計した文字が段位のコストへ届く連数です。1名へ集中させた場合の数字ではありません。星3を出発点として星4に100文字、固有1にさらに120文字、固有2に120文字、固有3に180文字、固有4に200文字が必要です。</p></section>
 <section class="panel"><h2>区切りまで回したときの到達率</h2><table><colgroup><col style="width:16%"><col style="width:16%"><col style="width:34%"><col style="width:34%"></colgroup><thead><tr><th>狙う人数</th><th>連数</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead>${reachRows(result).join('')}</table><p class="note">呼出ポイントは200連ごとに1名を確実に交換できるため、区切りちょうどで見ると呼出チャージより高くなります。狙う人数が増えるほど差は開きます。</p></section>
+<section class="panel"><h2>降りどきが選べるかどうか</h2><p>呼出チャージは全員そろうまで降りにくく、呼出ポイントは200連ごとに続行か撤退かを選べます。下は呼出チャージで全員の素体がそろう連数の散らばりで、半分の先生は中央値で降りられますが、残り半分はそこから先も払い続けることになります。</p><table><colgroup><col style="width:20%"><col style="width:20%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>狙う人数</th><th>半数</th><th>4人に3人</th><th>10人に9人</th><th>最悪</th></tr></thead><tbody>${riskRows(result).join('')}</tbody></table><p class="note">呼出ポイントなら200連で1名分の交換が確定するため、同じ予算を決め打ちで投じても手ぶらになりません。呼出チャージは天井が200連ごとに区切られる点は同じですが、自引きがそのままチャージを消費するので、取得機会が交換ぶんだけ少なくなります。</p></section>
+<section class="panel"><h2>すり抜け狙いは作戦になるか</h2><p>指名した生徒を引き当てる前にすり抜けが来れば、その生徒を交換に回して<b>重複100文字＋初回ボーナス100文字＋50欠片</b>を一度に得られます。狙う価値があるかを測るため、1人目を引き当てるまでにすり抜けが来る確率を出しました。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>待っている枠</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody><tr><th>1枠</th><td>8.43%</td><td class="best">12.50%</td><td>+4.07pt</td></tr><tr><th>2枠</th><td>15.86%</td><td class="best">22.22%</td><td>+6.36pt</td></tr><tr><th>3枠</th><td>22.45%</td><td class="best">30.00%</td><td>+7.55pt</td></tr></tbody></table><p class="note">呼出ポイントが上回るのは、1人目にかかる平均が142.9連と長く、その間ずっと枠が生きているからです。呼出チャージは90.1連で決着してしまい、100連目の50%と200連目の確定枠に待ち時間を打ち切られます。</p><p class="note">ただし、これを積極的に狙う価値はありません。すり抜け済みの生徒を優先して交換に回しても、400連で得られる文字は3文字しか増えず（3名狙いで504文字が507文字）、素体のそろう確率は2.7pt下がります。さらに、すり抜け枠を保つために既所持の生徒を指名し続ける「片方寄せ」まで踏み込むと、文字は36文字増える一方で素体は29.7pt落ちます。指名は0.7%、すり抜けは1枠あたり0.1%です。3.5倍強い手段を捨てて枠を温存する取引は、どう組んでも割に合いません。</p></section>
 <section class="panel"><h2>そろうまでの期待募集回数</h2><table><colgroup><col style="width:20%"><col style="width:40%"><col style="width:40%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th></tr></thead><tbody>${expectationRows(result).join('')}</tbody></table><p class="note">区切りを気にせず引き続けた場合の平均です。到達率の表とは逆に、2名・3名では呼出チャージのほうが短く済みます。区切りで止めるか揃うまで回すかで、有利な仕様が入れ替わります。</p></section>
 <section class="panel"><h2>99連を次の限定募集へ持ち越す</h2><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p><p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>${banking.guaranteedWithinBanked}連目</b>には199の確定枠へ届きます。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>1人を確保するまで</th><th>期待</th><th>最大</th><th>短縮</th></tr></thead><tbody><tr><th>チャージ0から</th><td>${banking.expectedPullsPlain.toFixed(1)}連</td><td>${banking.guaranteedWithinPlain}連</td><td>—</td></tr><tr><th>チャージ99から</th><td class="best">${banking.expectedPullsBanked.toFixed(1)}連</td><td class="best">${banking.guaranteedWithinBanked}連</td><td class="best">−${banking.savedPulls.toFixed(1)}連</td></tr></tbody></table><p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p><h3>どこで99連を貯めるか</h3><p>同じ99連でも、貯める場所によって副産物が変わります。フェス限定募集は星3が <b>${pct(rates.festivalStar3)}</b> なので99連あたり期待 <b>${banking.festivalStar3PerBank.toFixed(2)}人</b>。限定募集は <b>${pct(rates.limitedStar3)}</b> のままなので <b>${banking.limitedStar3PerBank.toFixed(2)}人</b> にとどまります。貯めるなら星3が倍のフェス限定募集のあいだに進めておくほうが、同じ連数で多く拾えます。</p><p class="note">ただし恒常星3の価値は1人あたり30文字と50欠片で、欲しい生徒が恒常の分母にどれだけ含まれるか次第です。「倍拾える」がそのまま「倍うれしい」にはなりません。</p><p class="note">また、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>${pct(banking.survivalToBank)}</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
@@ -327,21 +456,80 @@ const ENGLISH_REPLACEMENTS = [
     '<li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li>',
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
-  ['<h2>そろうまでの累積確率</h2>', '<h2>Cumulative probability</h2>'],
+  ['<h2>持ち帰る文字と、そろう確率</h2>', '<h2>Eleph earned, and the odds of completing</h2>'],
   ['aria-label="狙う人数"', 'aria-label="Number of students targeted"'],
   ['aria-label="グラフの凡例"', 'aria-label="Chart legend"'],
   ['呼出チャージ（実線）', 'Recruitment Charge (solid)'],
   ['呼出ポイント（破線）', 'Recruitment Points (dashed)'],
-  ['<h3>素体をそろえる</h3>', '<h3>Own every student</h3>'],
-  ['<h3>初回PUボーナスまでそろえる</h3>', '<h3>Collect every first-time bonus</h3>'],
+  ['<h3>期待文字数</h3>', '<h3>Expected Eleph</h3>'],
+  ['<h3>全員の素体がそろう確率</h3>', '<h3>Chance every student is owned</h3>'],
   [
-    '<p class="note">素体はすり抜けでも増えます。初回PUボーナスはすり抜けでは付かないため、指名か交換で確保するまで達成になりません。</p>',
-    '<p class="note">Off-target pulls still add students you own. They never grant the first-time bonus, so that goal is met only once each student has been selected or exchanged for.</p>',
+    '<p class="note">左の横線は上から固有4（720文字）、固有3（520）、固有2（340）、固有1（220）、星4（100）です。素体がそろうことはゴールではなく、凸を進める文字がいくつ残ったかが成果になります。</p>',
+    '<p class="note">The guides on the left chart mark UE4 (720 Eleph), UE3 (520), UE2 (340), UE1 (220) and 5★ (100), top to bottom. Owning the students is not the finish line — what matters is how much Eleph you carry away toward those upgrades.</p>',
   ],
+  ['<h2>区切りごとに持ち帰る文字</h2>', '<h2>Eleph earned at each milestone</h2>'],
+  ['<th>差</th>', '<th>Gap</th>'],
+  [
+    '<p class="note">狙う人数を変えても文字数はほとんど動きません。文字は「何人狙ったか」ではなく「何回引き当てたか」で決まるためです。呼出ポイントが一貫して上回るのは、0.7%の自引きと200ptの交換が独立に走り、同じ200連あたりの獲得機会が多いからです（呼出チャージ2.22回に対し呼出ポイント2.40回）。</p>',
+    '<p class="note">Targeting more students barely changes the Eleph total, because Eleph depends on how many times you hit — not on how many students you were after. Recruitment Points stays ahead because its 0.7% pulls and its 200-point exchange run independently, giving more chances per 200 pulls (2.40 against 2.22 for Recruitment Charge).</p>',
+  ],
+  ['<h2>凸のどこまで届くか</h2>', '<h2>How far up the upgrade track</h2>'],
+  ['<th>到達段位</th>', '<th>Upgrade</th>'],
+  ['<th>必要文字</th>', '<th>Eleph cost</th>'],
+  [
+    '<p class="note">3名を狙った場合に、対象3名分を合計した文字が段位のコストへ届く連数です。1名へ集中させた場合の数字ではありません。星3を出発点として星4に100文字、固有1にさらに120文字、固有2に120文字、固有3に180文字、固有4に200文字が必要です。</p>',
+    '<p class="note">Pull counts at which the Eleph earned across all three targeted students reaches each cost. These are not the figures for funnelling everything into one student. Starting from 3★, reaching 5★ costs 100 Eleph, then UE1 a further 120, UE2 another 120, UE3 another 180, and UE4 another 200.</p>',
+  ],
+  ['文字</b>', ' Eleph</b>'],
+  ['＋', '+'],
+  ['欠片</small>', ' shards</small>'],
+  ['文字</td>', ' Eleph</td>'],
+  ['<th>星4</th>', '<th>5★</th>'],
+  ['<th>固有1</th>', '<th>UE1</th>'],
+  ['<th>固有2</th>', '<th>UE2</th>'],
+  ['<th>固有3</th>', '<th>UE3</th>'],
+  ['<th>固有4</th>', '<th>UE4</th>'],
+  ["TIERS=[['星4',100],['固有1',220],['固有2',340],['固有3',520],['固有4',720]]", "TIERS=[['5★',100],['UE1',220],['UE2',340],['UE3',520],['UE4',720]]"],
+  ["Math.round(value*scale)+'文字'", "Math.round(value*scale)+' Eleph'"],
+  ["target+'名を狙ったときの期待文字数'", "'Expected Eleph when targeting '+target+(target===1?' student':' students')"],
+  ["target+'名の素体を全員分そろえる累積確率'", "'Cumulative probability of owning all '+target+(target===1?' student':' students')"],
+  ["'文字',top]", "'Eleph',top]"],
+  ["'素体',0]", "'owned',0]"],
   ['<h2>区切りまで回したときの到達率</h2>', '<h2>Results at each milestone</h2>'],
   [
     '<p class="note">呼出ポイントは200連ごとに1名を確実に交換できるため、区切りちょうどで見ると呼出チャージより高くなります。狙う人数が増えるほど差は開きます。</p>',
     '<p class="note">Recruitment Points guarantee one exchange every 200 pulls, so exactly at a milestone it beats Recruitment Charge. The gap widens as you target more students.</p>',
+  ],
+  ['<h2>降りどきが選べるかどうか</h2>', '<h2>Whether you get to walk away</h2>'],
+  [
+    '<p>呼出チャージは全員そろうまで降りにくく、呼出ポイントは200連ごとに続行か撤退かを選べます。下は呼出チャージで全員の素体がそろう連数の散らばりで、半分の先生は中央値で降りられますが、残り半分はそこから先も払い続けることになります。</p>',
+    '<p>Recruitment Charge is hard to walk away from until everyone is owned, whereas Recruitment Points lets you decide whether to continue every 200 pulls. Below is the spread of pulls needed to own every student under Recruitment Charge: half of players stop at the median, and the other half keep paying past it.</p>',
+  ],
+  ['<th>半数</th>', '<th>Half</th>'],
+  ['<th>4人に3人</th>', '<th>3 in 4</th>'],
+  ['<th>10人に9人</th>', '<th>9 in 10</th>'],
+  ['<th>最悪</th>', '<th>Worst case</th>'],
+  [
+    '<p class="note">呼出ポイントなら200連で1名分の交換が確定するため、同じ予算を決め打ちで投じても手ぶらになりません。呼出チャージは天井が200連ごとに区切られる点は同じですが、自引きがそのままチャージを消費するので、取得機会が交換ぶんだけ少なくなります。</p>',
+    '<p class="note">Recruitment Points guarantees one exchange at 200 pulls, so committing a fixed budget never leaves you empty-handed. Recruitment Charge also guarantees a student every 200 pulls, but because pulling one consumes the charge, it ends up with fewer acquisition chances by exactly the value of that exchange.</p>',
+  ],
+  ['<h2>すり抜け狙いは作戦になるか</h2>', '<h2>Is chasing off-target pulls a strategy?</h2>'],
+  [
+    // このパターンより前で「＋」が半角に置換済みのため、置換後の姿で指定する。
+    '<p>指名した生徒を引き当てる前にすり抜けが来れば、その生徒を交換に回して<b>重複100文字+初回ボーナス100文字+50欠片</b>を一度に得られます。狙う価値があるかを測るため、1人目を引き当てるまでにすり抜けが来る確率を出しました。</p>',
+    '<p>If an off-target pull lands before you hit the student you selected, exchanging for that same student pays <b>100 Eleph for the duplicate, 100 more from the unspent first-time bonus, and 50 shards</b> all at once. To judge whether that is worth chasing, here is the chance an off-target pull arrives before your first hit.</p>',
+  ],
+  ['<th>待っている枠</th>', '<th>Slots waiting</th>'],
+  ['<th>1枠</th>', '<th>1 slot</th>'],
+  ['<th>2枠</th>', '<th>2 slots</th>'],
+  ['<th>3枠</th>', '<th>3 slots</th>'],
+  [
+    '<p class="note">呼出ポイントが上回るのは、1人目にかかる平均が142.9連と長く、その間ずっと枠が生きているからです。呼出チャージは90.1連で決着してしまい、100連目の50%と200連目の確定枠に待ち時間を打ち切られます。</p>',
+    '<p class="note">Recruitment Points wins here because its first hit takes 142.9 pulls on average, keeping the slots alive that whole time. Recruitment Charge settles in 90.1 pulls, with the 50% slot at pull 100 and the guarantee at pull 200 cutting the wait short.</p>',
+  ],
+  [
+    '<p class="note">ただし、これを積極的に狙う価値はありません。すり抜け済みの生徒を優先して交換に回しても、400連で得られる文字は3文字しか増えず（3名狙いで504文字が507文字）、素体のそろう確率は2.7pt下がります。さらに、すり抜け枠を保つために既所持の生徒を指名し続ける「片方寄せ」まで踏み込むと、文字は36文字増える一方で素体は29.7pt落ちます。指名は0.7%、すり抜けは1枠あたり0.1%です。3.5倍強い手段を捨てて枠を温存する取引は、どう組んでも割に合いません。</p>',
+    '<p class="note">Chasing it deliberately is still not worth it. Prioritising an off-target student for the exchange adds only 3 Eleph over 400 pulls (504 becomes 507 when targeting three), while the chance of owning everyone drops 2.7pt. Going further and holding a student you already own just to keep the slots open gains 36 Eleph but costs 29.7pt of completion. Selecting is a 0.7% chance; each waiting slot is 0.1%. Trading away a method 3.5 times stronger to preserve those slots never pays off.</p>',
   ],
   ['<h2>そろうまでの期待募集回数</h2>', '<h2>Expected pulls needed</h2>'],
   [
@@ -385,11 +573,8 @@ const ENGLISH_REPLACEMENTS = [
   ['<th>呼出チャージ</th>', '<th>Recruitment Charge</th>'],
   ['<th>呼出ポイント</th>', '<th>Recruitment Points</th>'],
   // クライアント側の文言。ラベルは英語の語順に組み替える。
-  ["['chart-base',series.chargeBase,series.pointBase,'素体']", "['chart-base',series.chargeBase,series.pointBase,'owned']"],
-  ["['chart-bonus',series.chargeBonus,series.pointBonus,'初回PUボーナス']", "['chart-bonus',series.chargeBonus,series.pointBonus,'first-time bonus']"],
-  ["label=target+'名の'+noun+'を全員分そろえる累積確率'", "label='Cumulative probability of completing '+noun+' for '+target+(target===1?' student':' students')"],
   ["current+'連 '+noun+'\\n呼出チャージ '", "current+' pulls · '+noun+'\\nRecruitment Charge '"],
-  ["'%\\n呼出ポイント '", "'%\\nRecruitment Points '"],
+  ["'\\n呼出ポイント '", "'\\nRecruitment Points '"],
   ['。左右矢印で1連、Page UpとPage Downで10連、HomeとEndで移動できます', '. Use Left and Right for 1 pull, Page Up and Page Down for 10 pulls, and Home and End to jump'],
   // 短い語は最後に。タグ境界を含めて誤爆を防ぐ。
   ['<small>素体</small>', '<small>owned</small>'],
@@ -412,11 +597,24 @@ function renderFestival(result, locale = 'ja') {
   return replaceExact(japanese, ENGLISH_REPLACEMENTS);
 }
 
+/** 監査用JSONは10連刻みに間引く。曲線をそのまま書くと配布物が肥大するため。 */
+function thinForJson(result, step = 10) {
+  const thin = (values) => values.filter((_, pull) => pull % step === 0 || pull === values.length - 1);
+  const scenarios = Object.fromEntries(Object.entries(result.scenarios).map(([id, byTarget]) => [
+    id,
+    Object.fromEntries(Object.entries(byTarget).map(([target, row]) => [
+      target,
+      Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Array.isArray(value) ? thin(value) : value])),
+    ])),
+  ]));
+  return { ...result, metadata: { ...result.metadata, curveSampleStep: step }, scenarios };
+}
+
 function main() {
   const started = process.hrtime.bigint();
   const result = calculateFestival();
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'festival-results.json'), `${JSON.stringify(result, null, 2)}\n`);
+  fs.writeFileSync(path.join(OUTPUT_DIR, 'festival-results.json'), `${JSON.stringify(thinForJson(result), null, 2)}\n`);
   fs.mkdirSync(path.join(OUTPUT_DIR, 'en'), { recursive: true });
   fs.writeFileSync(path.join(OUTPUT_DIR, 'festival.html'), renderFestival(result));
   fs.writeFileSync(path.join(OUTPUT_DIR, 'en', 'festival.html'), renderFestival(result, 'en'));
@@ -449,6 +647,8 @@ module.exports = {
   chargeHitRate,
   chargeResidual,
   expectedPulls,
+  shardsToLetters,
+  percentilePull,
   SPOOK_EACH_RATE,
   MAX_PULLS,
   TARGETS,
