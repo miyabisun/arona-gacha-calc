@@ -174,7 +174,7 @@ test('有利な側にだけ印が付く', () => {
   assert.match(html, /class="best">172\.6連/);
   assert.match(html, /class="best">317\.1連/);
   // 交換枠の比較でも、文字が多い側と確保が確実な側に印が付く。
-  assert.match(html, /<td class="best">605文字<\/td>/);
+  assert.match(html, /<td[^>]*class="best"[^>]*>605文字<\/td>/);
   assert.ok((html.match(/class="best"/g) ?? []).length >= 6);
 });
 
