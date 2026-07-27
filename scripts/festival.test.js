@@ -158,23 +158,22 @@ test('生成ページの数値が計算結果と一致する', () => {
       assert.ok(html.includes(`${Math.round(row.pulls * 120).toLocaleString('ja-JP')}石`), `${target}PU ${plan} の石`);
     }
   }
-  // 素体をそろえる費用は呼出チャージ・呼出ポイントの両方を出す。
-  for (const target of TARGETS) {
-    assert.ok(html.includes(`${result.scenarios.charge[target].expectedPullsToAllBase.toFixed(1)}連`));
-    assert.ok(html.includes(`${result.scenarios.point[target].expectedPullsToAllBase.toFixed(1)}連`));
+  // 2PUの呼出ポイント節は200連時点の4分岐を確率つきで出す。
+  const branch = result.twoPuBranch;
+  for (const value of [branch.bothArrived, branch.exchangeForPartner, branch.exchangeForMain, branch.overtime]) {
+    assert.ok(html.includes(`${(value * 100).toFixed(1)}%`), `分岐 ${(value * 100).toFixed(1)}%`);
   }
 });
 
 test('有利な側にだけ印が付く', () => {
   const result = calculateFestival();
   const html = renderFestival(result);
-  // 2名・3名は呼出チャージが安く、4名だけ呼出ポイントが安い。
-  assert.ok(result.scenarios.charge[2].expectedPullsToAllBase < result.scenarios.point[2].expectedPullsToAllBase);
-  assert.ok(result.scenarios.point[4].expectedPullsToAllBase < result.scenarios.charge[4].expectedPullsToAllBase);
+  // 呼出チャージ表: すり抜け込のほうが期待連数が短く、指名だけのほうが文字が多い。
   assert.match(html, /class="best">172\.6連/);
-  assert.match(html, /class="best">317\.1連/);
-  // 交換枠の比較でも、文字が多い側と確保が確実な側に印が付く。
-  assert.match(html, /<td[^>]*class="best"[^>]*>605文字<\/td>/);
+  assert.match(html, /class="best">200文字/);
+  // 呼出ポイントの分岐表では最頻の「イロハ自引きのみ」に印が付く。
+  assert.ok(result.twoPuBranch.exchangeForPartner > result.twoPuBranch.overtime);
+  assert.match(html, new RegExp(`class="best">${(result.twoPuBranch.exchangeForPartner * 100).toFixed(1)}%`));
   assert.ok((html.match(/class="best"/g) ?? []).length >= 6);
 });
 

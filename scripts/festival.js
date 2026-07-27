@@ -645,7 +645,14 @@ const PU_TAB_LEAD = {
   4: '復刻の制服ネル・リオも未所持の新規先生。対象4名すべて狙い。',
 };
 
-const EXCHANGE_BLOCK = `<h3>旧仕様なら交換枠を選びにいける</h3><p>2名狙いなら両仕様に大差なし。呼出ポイントはほぼ確実に200連ぶんの石を取られるが、13.7%で交換枠がまるごと余る。余り枠は100文字、既所持の制服ネルなら200文字。差はその程度。</p><p>ただし<b>フェス限を取り逃す選択肢はなし</b>。イブキ未所持なら1枠目は必ずイブキ確保。差が出るのは2枠目——既所持でボーナス未消費の生徒（固有3止まりの制服ネル等）なら重複100＋ボーナス100の<b>200文字</b>。</p><h4>400連・交換2枠の使い道</h4><table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>交換枠の流し先</th><th>持ち帰る文字</th><th>イロハ固有2</th><th>イブキ確保</th></tr></thead><tbody>__EXCHANGE_ROWS__</tbody></table><p class="note">2枠目をイロハに回せば固有2到達77.0%、既所持のネルなら+100文字の605文字。<b>この選択権自体が新仕様には無い価値。呼出チャージに2枠目は存在しない。</b></p><h4>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h4>__JOINT_TABLE__<p class="note">イロハ3体=353文字で固有2到達。この進め方なら<b>イブキは必ず1体以上</b>、イロハ3体以上は77.0%。</p>`;
+/** 2PU専用。呼出ポイントの機械的な流れと、200連時点の分岐だけを示す。 */
+function pointBlock(result) {
+  const b = result.twoPuBranch;
+  const p = (v) => `${(v * 100).toFixed(1)}%`;
+  return `<h3>呼出ポイント</h3><p>機械的に水着イロハを200連指名。200連時点の結果だけで分岐。</p><table><colgroup><col style="width:40%"><col style="width:16%"><col style="width:44%"></colgroup><thead><tr><th>200連時点</th><th>確率</th><th>動き</th></tr></thead><tbody><tr><th>イロハ自引き＋イブキすり抜け</th><td data-label="確率">${p(b.bothArrived)}</td><td data-label="動き">完了。交換枠は余り、どちらかの重複100文字</td></tr><tr><th>イロハ自引きのみ</th><td data-label="確率" class="best">${p(b.exchangeForPartner)}</td><td data-label="動き">交換でイブキ確保、完了</td></tr><tr><th>イブキすり抜けのみ</th><td data-label="確率">${p(b.exchangeForMain)}</td><td data-label="動き">交換でイロハ確保、完了</td></tr><tr><th>どちらも無し</th><td data-label="確率">${p(b.overtime)}</td><td data-label="動き">地獄の残業へ。イロハを引き続け、400連時点で不足分を交換（最悪イロハ・イブキを各1体交換）</td></tr></tbody></table><p class="note">残業中にイロハが出ても引き止めなし、400連まで回して不足分を交換。余った交換枠はイロハかイブキの重複100文字に充て、他生徒は登場させない。</p>
+<h3>水着イブキへのPU切替はナシ</h3><p>イロハを引けた後にPU対象をイブキへ切り替えるプラン：期待文字が${Math.round(result.blockRun[2].focus.letters)}文字→${Math.round(result.blockRun[2].sequential.letters)}文字に減るだけで消費は同一。<b>ありえない。</b></p><p class="note">イロハ確保後に固有3の制服ネルへ切り替えれば期待+56文字だが、旧仕様は今後戻らないため、ニッチパターンとして対象外。</p>`;
+}
+
 
 const PU_CLOSING_SOURCE = {
   2: '<p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。期待文字はどちらも300前後で、イブキが素体確保で十分な性能ならこれで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p>',
@@ -678,26 +685,19 @@ function retreatSection(result) {
     const lostLetters = without.letters - withSpook.letters;
     const charge = result.scenarios.charge[target].expectedPullsToAllBase;
     const point = result.scenarios.point[target].expectedPullsToAllBase;
-    const stoneGap = Math.abs(Math.round((point - charge) * PYROXENE_PER_PULL)).toLocaleString('ja-JP');
     const seq = result.blockRun[target].sequential;
     const pointPlan = target === 2 ? result.blockRun[target].focus : seq;
-    const cheaper = charge <= point ? '呼出チャージ' : '呼出ポイント';
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}</p>
 <h3>結論</h3><p class="verdict">石で選ぶなら<b>呼出チャージ</b>（${stone(pointPlan.pulls - withSpook.expectedPulls)}石安い）。文字で選ぶなら<b>呼出ポイント</b>（+${Math.round(pointPlan.letters - withSpook.letters)}文字）。</p><table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>仕様と進め方</th><th>確率</th><th>連数</th><th>石</th><th>持ち帰る文字</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}
 <h3>呼出チャージ</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>${target}PU期待値</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜け込</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜け率</th><td colspan="2" data-label="すり抜け率">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
-<h3>石はどちらが安いか</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result, target).join('')}</tbody></table><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result, target).join('')}</tbody></table><p class="note">素体をそろえるだけなら${cheaper}が${stoneGap}石安い。同じ石での文字は一貫して呼出ポイント優位。降りられる代わりに毎回この差を払う。</p>${target === 2 ? `<p class="note">PU対象を引けた順に水着イブキへ乗り換える案は、イロハ集中比で期待文字${Math.round(result.blockRun[2].focus.letters)}文字から${Math.round(result.blockRun[2].sequential.letters)}文字に減るだけで消費は同一。有意差なし、<b>PU対象は水着イロハ集中の一択</b>。</p>` : ''}
-${target === 2 ? EXCHANGE_BLOCK.replace('__EXCHANGE_ROWS__', exchangePlanRows(result).join('')).replace('__JOINT_TABLE__', jointTable(result, 400, 'subThenMain')) : ''}</div>`;
+
+${target === 2 ? pointBlock(result) : ''}</div>`;
   }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集種別ごとに引き継ぎ。フェス限で99連止めしておけば、<b>次の限定をチャージ99で開始できる</b>。指名は<b>素体所持・初回ボーナス未受領の生徒</b>（制服ネル等）。引ければ重複100＋ボーナス100の200文字。</p><h3>カウンタは無駄にならない</h3><p>途中で出てもカウンタは<b>積み直し</b>。99連完走時の残カウンタ期待値は${result.banking.expectedCharge.toFixed(0)}、持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>。暴発で台無しにはならない。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>持ち出しは99連−短縮分の<b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名追いの効率${result.banking.lettersPerPull.toFixed(2)}文字/連で換算して<b>${result.banking.costLetters.toFixed(0)}文字</b>の支出。対する受け取りは以下。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで支出を超過。星3と欠片は丸ごと上乗せ。<b>指名生徒の文字を取り切りたい先生には得。</b></p><p class="note">同じ99連ならフェス限期間のほうが欠片約${result.shardYield.bankGain}枚多い。凸に回せる分に割り引けば${result.shardYield.bankGainLetters}文字程度、判断には影響なし。</p><h3>出たら即止め</h3><p class="note">出た後も99連まで回すと効率は約1.1文字/連に半減。<b>出た時点で止めれば</b>持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連、素追いと同効率。</p><h3>向き・不向き</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素追いと同じ石効率にフェス限すり抜けが上乗せ。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連分返ってくる。</li><li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li></ul></div>`;
   return `<section class="panel"><h2>狙う人数で選ぶ</h2><p>結論は狙う人数で変わる。該当するタブに、費用から降りどきまでを集約。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
 // フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
 // フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
-// フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
-const EXCHANGE_PLAN_LABELS = [
-  ['subThenMain', 'イブキを確保 → 残りはイロハ'],
-  ['subThenVeteran', 'イブキを確保 → 残りは既所持のネル'],
-];
 
 const stone = (pulls) => Math.round(pulls * PYROXENE_PER_PULL).toLocaleString('ja-JP');
 
@@ -719,61 +719,6 @@ function outcomeRows(result, targets) {
     rows.push(`<tr><td data-label="確率">ならして</td><td data-label="連数">${plan.pulls.toFixed(1)}連</td><td data-label="石">${stone(plan.pulls)}石</td><td data-label="持ち帰る文字">${Math.round(plan.letters)}文字</td></tr>`);
   }
   return rows;
-}
-
-function costRows(result, only) {
-  return (only ? [only] : TARGETS).map((target) => {
-    const charge = result.scenarios.charge[target].expectedPullsToAllBase;
-    const point = result.scenarios.point[target].expectedPullsToAllBase;
-    const gap = (point - charge) * PYROXENE_PER_PULL;
-    const chargeMark = charge <= point ? ' class="best"' : '';
-    const pointMark = point < charge ? ' class="best"' : '';
-    return `<tr><th>${target}名</th><td data-label="呼出チャージ"${chargeMark}>${charge.toFixed(1)}連<small>${stone(charge)}石</small></td><td data-label="呼出ポイント"${pointMark}>${point.toFixed(1)}連<small>${stone(point)}石</small></td><td data-label="差">${gap >= 0 ? '新が' : '旧が'}${Math.abs(Math.round(gap)).toLocaleString('ja-JP')}石${gap >= 0 ? '安い' : '安い'}</td></tr>`;
-  });
-}
-
-/** 同じ連数を積んだ場合に持ち帰る文字。石あたりの実入りを比べる。 */
-function sameBudgetRows(result, only) {
-  return (only ? [only] : TARGETS).map((target) => {
-    const cells = [200, 400].map((pull) => {
-      const charge = result.scenarios.charge[target].letters[pull];
-      const point = result.scenarios.point[target].letters[pull];
-      return `<td data-label="${pull}連 チャージ">${Math.round(charge)}文字</td><td data-label="${pull}連 ポイント" class="best">${Math.round(point)}文字</td><td data-label="${pull}連 差">+${Math.round(point - charge)}</td>`;
-    }).join('');
-    return `<tr><th>${target}名</th>${cells}</tr>`;
-  });
-}
-
-function exchangePlanRows(result) {
-  const plans = result.focusExchange[400];
-  const bestLetters = Math.max(...EXCHANGE_PLAN_LABELS.map(([id]) => plans[id].letters));
-  const bestUe2 = Math.max(...EXCHANGE_PLAN_LABELS.map(([id]) => plans[id].mainUe2));
-  return EXCHANGE_PLAN_LABELS.map(([id, label]) => {
-    const row = plans[id];
-    const letterMark = row.letters >= bestLetters - 1e-9 ? ' class="best"' : '';
-    const ue2Mark = row.mainUe2 >= bestUe2 - 1e-9 ? ' class="best"' : '';
-    const subMark = row.subNone < 1e-9 ? ' class="best"' : '';
-    return `<tr><th>${label}</th><td data-label="持ち帰る文字"${letterMark}>${Math.round(row.letters)}文字</td><td data-label="イロハ固有2"${ue2Mark}>${(row.mainUe2 * 100).toFixed(1)}%</td><td data-label="イブキ確保"${subMark}>${((1 - row.subNone) * 100).toFixed(1)}%</td></tr>`;
-  });
-}
-
-/** 本命と相方を何体お迎えできたかの同時分布。3体以上はまとめる。 */
-function jointTable(result, limit, planId) {
-  const { joint } = result.focusExchange[limit][planId];
-  const bucket = Array.from({ length: 4 }, () => Array(4).fill(0));
-  joint.forEach((row, main) => row.forEach((mass, sub) => {
-    bucket[Math.min(main, 3)][Math.min(sub, 3)] += mass;
-  }));
-  const label = (count) => (count === 3 ? '3体以上' : `${count}体`);
-  const head = [0, 1, 2, 3].map((sub) => `<th>イブキ${label(sub)}</th>`).join('');
-  const rows = bucket.map((row, main) => {
-    const cells = row.map((mass, sub) => {
-      const mark = mass >= 0.1 ? ' class="best"' : '';
-      return `<td data-label="イブキ${label(sub)}"${mark}>${(mass * 100).toFixed(1)}%</td>`;
-    }).join('');
-    return `<tr><th>イロハ${label(main)}</th>${cells}</tr>`;
-  }).join('');
-  return `<table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>お迎え数</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /** 差がある場合だけ有利な側へ印を付ける。到達率は高い方、期待回数は少ない方が有利。 */
@@ -805,8 +750,6 @@ ${retreatSection(result)}
  */
 const ENGLISH_REPLACEMENTS = [
   ['<html lang="ja">', '<html lang="en">'],
-  ['イブキを確保 → 残りはイロハ', 'Secure Ibuki, then Iroha'],
-  ['イブキを確保 → 残りは既所持のネル', 'Secure Ibuki, then owned Nel'],
   ['href="css/festival.css"', 'href="../css/festival.css"'],
   ['src="js/festival.js"', 'src="../js/festival.js"'],
   ['<title>5.5フェス限の新旧比較</title>', '<title>5.5th Anniversary Festival Comparison</title>'],
@@ -843,13 +786,38 @@ const ENGLISH_REPLACEMENTS = [
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
+  ['<h3>呼出ポイント</h3>', '<h3>Recruitment Points</h3>'],
   [
-    '<p class="note">PU対象を引けた順に水着イブキへ乗り換える案は、イロハ集中比で期待文字',
-    '<p class="note">Switching the pickup to Swimsuit Ibuki as each student lands was also run: compared with staying on Iroha it only drops the expected Eleph from ',
+    '<p>機械的に水着イロハを200連指名。200連時点の結果だけで分岐。</p>',
+    '<p>Select Swimsuit Iroha for 200 pulls, mechanically. The branch depends only on where things stand at pull 200.</p>',
   ],
-  ['文字から', ' to '],
-  ['文字に減るだけで消費は同一。有意差なし、<b>PU対象は水着イロハ集中の一択</b>。</p>',
-   ', at identical cost. No meaningful shard or Eleph efficiency separates them, so <b>staying on Swimsuit Iroha is the only sensible pickup</b>.</p>'],
+  ['<th>200連時点</th>', '<th>At pull 200</th>'],
+  ['<th>動き</th>', '<th>Action</th>'],
+  ['data-label="動き"', 'data-label="Action"'],
+  ['<th>イロハ自引き＋イブキすり抜け</th>', '<th>Iroha pulled + Ibuki spooked</th>'],
+  ['<th>イロハ自引きのみ</th>', '<th>Iroha pulled only</th>'],
+  ['<th>イブキすり抜けのみ</th>', '<th>Ibuki spooked only</th>'],
+  ['<th>どちらも無し</th>', '<th>Neither</th>'],
+  ['>完了。交換枠は余り、どちらかの重複100文字<', '>Done. Exchange goes spare: 100 Eleph as a duplicate of either<'],
+  ['>交換でイブキ確保、完了<', '>Exchange secures Ibuki, done<'],
+  ['>交換でイロハ確保、完了<', '>Exchange secures Iroha, done<'],
+  ['>地獄の残業へ。イロハを引き続け、400連時点で不足分を交換（最悪イロハ・イブキを各1体交換）<', '>Overtime from hell. Keep pulling Iroha; at 400 exchange whatever is missing (worst case, one Iroha and one Ibuki)<'],
+  [
+    '<p class="note">残業中にイロハが出ても引き止めなし、400連まで回して不足分を交換。余った交換枠はイロハかイブキの重複100文字に充て、他生徒は登場させない。</p>',
+    '<p class="note">An Iroha landing mid-overtime changes nothing: pull to 400 and exchange what is missing. Spare exchanges go to Iroha or Ibuki duplicates at 100 Eleph — no other student enters the story.</p>',
+  ],
+  ['<h3>水着イブキへのPU切替はナシ</h3>', '<h3>Never switch the pickup to Ibuki</h3>'],
+  [
+    '<p>イロハを引けた後にPU対象をイブキへ切り替えるプラン：期待文字が',
+    '<p>The plan that switches the pickup to Ibuki once Iroha lands: expected Eleph drops from ',
+  ],
+  ['文字→', ' to '],
+  ['文字に減るだけで消費は同一。<b>ありえない。</b></p>', ' at identical cost. <b>Out of the question.</b></p>'],
+  [
+    '<p class="note">イロハ確保後に固有3の制服ネルへ切り替えれば期待+56文字だが、旧仕様は今後戻らないため、ニッチパターンとして対象外。</p>',
+    '<p class="note">Switching to a UE3 Uniform Nel after Iroha would add an expected +56 Eleph, but the old system is never coming back — a niche pattern, out of scope.</p>',
+  ],
+
 
   ['>呼出ポイント</th>', '>Recruitment Points</th>'],
   [
@@ -882,8 +850,6 @@ const ENGLISH_REPLACEMENTS = [
   ['<p class="verdict">石で選ぶなら<b>呼出チャージ</b>（', '<p class="verdict">For Pyroxene, <b>Recruitment Charge</b> ('],
   ['石安い）。文字で選ぶなら<b>呼出ポイント</b>（+', ' cheaper). For Eleph, <b>Recruitment Points</b> (+'],
   ['文字）。</p>', ' Eleph).</p>'],
-  ['<h3>石はどちらが安いか</h3>', '<h3>Which costs less</h3>'],
-  ['<h3>旧仕様なら交換枠を選びにいける</h3>', '<h3>Recruitment Points lets you aim the exchange</h3>'],
 
   ['<h3>出たら即止め</h3>', '<h3>But stop the moment she arrives</h3>'],
   [
@@ -917,51 +883,9 @@ const ENGLISH_REPLACEMENTS = [
   ['<th>期待募集回数</th>', '<th>Expected pulls</th>'],
   ['<th>持ち帰る文字</th>', '<th>Eleph earned</th>'],
   ['aria-label="狙う人数"', 'aria-label="Number of students targeted"'],
-  ['<td data-label="差">新が', '<td data-label="Gap">Charge by '],
-  ['<td data-label="差">旧が', '<td data-label="Gap">Points by '],
-  ['石安い</td>', ' Pyroxene</td>'],
   ['石</td>', ' Pyroxene</td>'],
   ['連</td>', ' pulls</td>'],
   ['文字</td>', ' Eleph</td>'],
-  ['連<small>', ' pulls<small>'],
-  ['石</small>', ' Pyroxene</small>'],
-  ['<th rowspan="2">狙う人数</th>', '<th rowspan="2">Students</th>'],
-  ['<th colspan="3">200連（24,000石）</th>', '<th colspan="3">200 pulls (24,000 Pyroxene)</th>'],
-  ['<th colspan="3">400連（48,000石）</th>', '<th colspan="3">400 pulls (48,000 Pyroxene)</th>'],
-  ['<th>チャージ</th>', '<th>Charge</th>'],
-  ['<th>ポイント</th>', '<th>Points</th>'],
-  ['<p class="note">素体をそろえるだけなら呼出チャージ', '<p class="note">If the goal is simply owning everyone, Recruitment Charge'],
-  ['<p class="note">素体をそろえるだけなら呼出ポイント', '<p class="note">If the goal is simply owning everyone, Recruitment Points'],
-  ['が1,441石安い。', ' comes in 1,441 Pyroxene cheaper. '],
-  ['が455石安い。', ' comes in 455 Pyroxene cheaper. '],
-  ['が268石安い。', ' comes in 268 Pyroxene cheaper. '],
-  [
-    '同じ石での文字は一貫して呼出ポイント優位。降りられる代わりに毎回この差を払う。</p>',
-    'Spend the same Pyroxene, though, and Recruitment Points consistently carries away more Eleph. The option to walk away is paid for with that gap, banner after banner.</p>',
-  ],
-  [
-    '<p>2名狙いなら両仕様に大差なし。呼出ポイントはほぼ確実に200連ぶんの石を取られるが、13.7%で交換枠がまるごと余る。余り枠は100文字、既所持の制服ネルなら200文字。差はその程度。</p>',
-    '<p>Chasing just two students, the systems land in much the same place. Recruitment Points all but guarantees a full 200 pulls of spending, but a fair share of the time the exchange goes entirely spare. A spare exchange is 100 Eleph, or 200 sent into a Uniform Nel you already own. That is the whole of it.</p>',
-  ],
-  [
-    '<p>ただし<b>フェス限を取り逃す選択肢はなし</b>。イブキ未所持なら1枠目は必ずイブキ確保。差が出るのは2枠目——既所持でボーナス未消費の生徒（固有3止まりの制服ネル等）なら重複100＋ボーナス100の<b>200文字</b>。</p>',
-    '<p>That said, <b>letting a festival student slip away is never an option</b>. If Ibuki is not owned, the first exchange always secures her — and the new system reaches that point just as reliably, so nothing separates them there. The difference is the second exchange: sent into a student you already own whose bonus is unspent — <b>say Uniform Nel sitting at UE3</b> — it pays 100 for the duplicate plus the 100 bonus, <b>200 Eleph</b>.</p>',
-  ],
-  ['<h4>400連・交換2枠の使い道</h4>', '<h4>Spending the two exchanges over 400 pulls</h4>'],
-  [
-    '<p class="note">2枠目をイロハに回せば固有2到達77.0%、既所持のネルなら+100文字の605文字。<b>この選択権自体が新仕様には無い価値。呼出チャージに2枠目は存在しない。</b></p>',
-    '<p class="note">With Ibuki secured, the second exchange into Iroha lifts her UE2 rate to 77.0%; into an already-owned Nel it adds 100 Eleph for 605 total. Push the featured attacker, or push someone already on your roster — <b>having that choice at all is worth something the new system does not offer.</b></p>',
-  ],
-  ['<h4>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h4>', '<h4>Copies over 400 pulls (secure Ibuki, then Iroha)</h4>'],
-
-  ['<th>交換枠の流し先</th>', '<th>Where the exchanges go</th>'],
-  ['<th>イブキ確保</th>', '<th>Ibuki owned</th>'],
-  // 長い本文を先に置換する。あとに続く短いラベルが本文の一部を書き換えてしまうため。
-  ['<th>お迎え数</th>', '<th>Copies</th>'],
-  [
-    '<p class="note">イロハ3体=353文字で固有2到達。この進め方なら<b>イブキは必ず1体以上</b>、イロハ3体以上は77.0%。</p>',
-    '<p class="note">Three copies of Iroha come to 353 Eleph, which clears UE2. On this plan <b>Ibuki always arrives at least once</b>, and Iroha still reaches three or more copies 77.0% of the time.</p>',
-  ],
   ['data-pu="bank">99連</button>', 'data-pu="bank">Banking</button>'],
   ['連</b>（', ' pulls</b> ('],
   [
@@ -1031,9 +955,6 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p>',
     '<p class="note">Put another way, it buys 76 Eleph for 7,837 Pyroxene. That is a fair trade if an attacker needs UE2 soon, but if the goal is to own everyone and carry Pyroxene into the next banner, switching as each student lands is cheaper. <b>Having that call to make at all belongs to Recruitment Points alone.</b></p>',
   ],
-  // 表のラベルは本文より後に置く。先に適用すると本文の一部を書き換えてしまう。
-  ['体以上', '+'],
-  ['<th>イロハ固有2</th>', '<th>Iroha at UE2</th>'],
   [
     '<p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p>',
     '<p class="note">Going after all four, even switching as each one lands leaves you <b>only a 26.6% chance of stopping at 200 pulls</b>; six in ten run to 400 and better than one in ten to 600. Staying on Iroha drops that release rate to 6.6% and costs 58,633 Pyroxene on average — 13,886 more than switching.</p>',
@@ -1044,22 +965,7 @@ const ENGLISH_REPLACEMENTS = [
   ],
   ['data-label="期待募集回数"', 'data-label="Expected pulls"'],
   ['data-label="持ち帰る文字"', 'data-label="Eleph earned"'],
-  ['data-label="呼出チャージ"', 'data-label="Recruitment Charge"'],
-  ['data-label="呼出ポイント"', 'data-label="Recruitment Points"'],
-  ['data-label="イロハ固有2"', 'data-label="Iroha at UE2"'],
-  ['data-label="イブキ確保"', 'data-label="Ibuki owned"'],
-  ['連 チャージ"', ' pulls, Charge"'],
-  ['連 ポイント"', ' pulls, Points"'],
-  ['連 差"', ' pulls, gap"'],
-  ['イロハ', 'Iroha '],
-  ['イブキ', 'Ibuki '],
-  ['体</th>', '</th>'],
-  ['体"', '"'],
-  ['>2名<', '>2 students<'],
-  ['>3名<', '>3 students<'],
-  ['>4名<', '>4 students<'],
   ['<th>差</th>', '<th>Gap</th>'],
-  ['<th>狙う人数</th>', '<th>Students</th>'],
 ];
 
 function renderFestival(result, locale = 'ja') {
