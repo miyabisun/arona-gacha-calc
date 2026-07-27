@@ -8,23 +8,31 @@ function replaceExact(source, replacements) {
   }, source);
 }
 
+/** ページ識別子から、同じ階層で参照するファイル名を返す。indexだけディレクトリ指定。 */
+function pageHref(page) {
+  return page === 'index' ? './' : `${page}.html`;
+}
+
 function languageNav(locale, page) {
   const english = locale === 'en';
-  const indexCurrent = page === 'index' ? ' aria-current="page"' : '';
-  const faqCurrent = page === 'faq' ? ' aria-current="page"' : '';
-  const pageLinks = english
-    ? `<a href="./"${indexCurrent}>Probability chart</a><a href="faq.html"${faqCurrent}>Q&amp;A</a>`
-    : `<a href="./"${indexCurrent}>確率表</a><a href="faq.html"${faqCurrent}>Q&amp;A</a>`;
+  const titles = english
+    ? { index: 'Probability chart', festival: '5.5th', faq: 'Q&amp;A' }
+    : { index: '確率表', festival: '5.5th', faq: 'Q&amp;A' };
+  const pageLinks = ['index', 'festival', 'faq'].map((id) => {
+    const current = id === page ? ' aria-current="page"' : '';
+    return `<a href="${pageHref(id)}"${current}>${titles[id]}</a>`;
+  }).join('');
+  const counterpart = page === 'index' ? '' : `${page}.html`;
   const languageLinks = english
-    ? `<a href="${page === 'index' ? '../' : '../faq.html'}" lang="ja" hreflang="ja">JP</a><span aria-current="true">EN</span>`
-    : `<span aria-current="true">JP</span><a href="${page === 'index' ? 'en/' : 'en/faq.html'}" lang="en" hreflang="en">EN</a>`;
+    ? `<a href="../${counterpart}" lang="ja" hreflang="ja">JP</a><span aria-current="true">EN</span>`
+    : `<span aria-current="true">JP</span><a href="en/${counterpart}" lang="en" hreflang="en">EN</a>`;
   const primaryLabel = english ? 'Primary navigation' : 'メインナビゲーション';
   const languageLabel = english ? 'Language' : '言語';
   return `<nav class="nav" aria-label="${primaryLabel}"><div class="nav-pages">${pageLinks}</div><div class="language-switch" aria-label="${languageLabel}">${languageLinks}</div></nav>`;
 }
 
 function alternateLinks(page) {
-  const suffix = page === 'index' ? '' : 'faq.html';
+  const suffix = page === 'index' ? '' : `${page}.html`;
   const japanese = `https://miyabisun.github.io/arona-gacha-calc/${suffix}`;
   const english = `https://miyabisun.github.io/arona-gacha-calc/en/${suffix}`;
   return `<link rel="alternate" hreflang="ja" href="${japanese}"><link rel="alternate" hreflang="en" href="${english}"><link rel="alternate" hreflang="x-default" href="${japanese}">`;

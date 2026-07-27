@@ -4,9 +4,10 @@
   "private": true,
   "description": "Blue Archive recruitment probability calculator",
   "scripts": {
-    "build": "npm run build:faq && npm run build:comparison",
+    "build": "npm run build:faq && npm run build:comparison && npm run build:festival",
     "build:faq": "node scripts/calculate.js",
     "build:comparison": "node scripts/compare.js",
+    "build:festival": "node scripts/festival.js",
     "test": "node --test scripts/*.test.js"
   },
   "engines": {
