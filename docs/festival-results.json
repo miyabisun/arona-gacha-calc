@@ -5160,9 +5160,11 @@
     "guaranteedWithinBanked": 101,
     "savingWhenHit": 20.20802080443948,
     "lettersPerPull": 2.220439234217371,
-    "costLetters": 138.59999999999994,
+    "chaseRate": 2.450439234217371,
+    "costLetters": 152.95661895572465,
     "star3Net": 3.7707213186591106,
-    "lettersTotal": 146.14435394200882,
+    "lettersFromStar3": 37.707213186591105,
+    "lettersTotal": 183.85156712859992,
     "twoSetPlain": 180.14453799767517,
     "twoSetBanked": 127.11766433056242,
     "twoSetSaved": 53.02687366711275

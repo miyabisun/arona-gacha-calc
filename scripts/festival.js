@@ -20,6 +20,9 @@ const FES_STAR3_RATE = 0.06;
 const LIMITED_STAR3_RATE = 0.03;
 const NORMAL_BANNER_STAR3_RATE = 0.03;
 const BANK_PULLS = 99;
+// 文字目的のPU狙い(期待90連)中も、PU以外の星3が2.3%(3%-0.7%)で登場し50欠片=10文字分を得る。
+const CHASE_OTHER_STAR3_RATE = 0.03 - 0.007;
+const CHASE_SHARD_LETTERS = 10;
 // 文字(エレフ)の入手。PU枠は重複でも100、すり抜け枠の重複は30。
 const BONUS_LETTERS = 100;
 const PU_DUPLICATE_LETTERS = 100;
@@ -587,9 +590,13 @@ function calculateFestival() {
     / banking.hitChance;
   // 支出を文字へ直すレート。指名を追う効率そのもの。
   banking.lettersPerPull = (PU_DUPLICATE_LETTERS + BONUS_LETTERS) / banking.expectedPullsPlain;
-  banking.costLetters = banking.carryPulls * banking.lettersPerPull;
+  // 補填込みの掘り効率。星3の欠片ぶんを上乗せする(ボーナス未取得のフェス限が残る先生は更に得だが、
+  // できない先生もいるため新仕様不利側=この保守値を採用)。
+  banking.chaseRate = banking.lettersPerPull + CHASE_OTHER_STAR3_RATE * CHASE_SHARD_LETTERS;
+  banking.costLetters = banking.carryPulls * banking.chaseRate;
   banking.star3Net = banking.star3Gained - banking.star3Forgone;
-  banking.lettersTotal = banking.lettersFromNamed + banking.lettersFromPool;
+  banking.lettersFromStar3 = banking.star3Net * CHASE_SHARD_LETTERS;
+  banking.lettersTotal = banking.lettersFromNamed + banking.lettersFromPool + banking.lettersFromStar3;
   banking.twoSetPlain = banking.expectedPullsPlain * 2;
   banking.twoSetBanked = banking.expectedPullsBanked + banking.expectedPullsPlain;
   banking.twoSetSaved = banking.twoSetPlain - banking.twoSetBanked;
@@ -690,7 +697,7 @@ function retreatSection(result) {
 <h3>呼出チャージ</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>獲得文字</th></tr></thead><tbody><tr><th>${target}PU期待値</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="獲得文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜け込</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="獲得文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="獲得文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜け率</th><td colspan="2" data-label="すり抜け率">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
 
 ${target === 2 ? pointBlock(result) : ''}</div>`;
-  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集種別ごとに引き継ぎ。フェス限で99連止めしておけば、<b>次の限定をチャージ99で開始できる</b>。指名は<b>素体所持・初回ボーナス未受領の生徒</b>（制服ネル等）。引ければ重複100＋ボーナス100の200文字。</p><h3>カウンタは無駄にならない</h3><p>途中で出てもカウンタは<b>積み直し</b>。99連完走時の残カウンタ期待値は${result.banking.expectedCharge.toFixed(0)}、持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>。暴発で台無しにはならない。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>持ち出しは99連−短縮分の<b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名追いの効率${result.banking.lettersPerPull.toFixed(2)}文字/連で換算して<b>${result.banking.costLetters.toFixed(0)}文字</b>の支出。対する受け取りは以下。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで支出を超過。星3と欠片は丸ごと上乗せ。<b>指名生徒の文字を取り切りたい先生には得。</b></p><p class="note">同じ99連ならフェス限期間のほうが欠片約${result.shardYield.bankGain}枚多い。凸に回せる分に割り引けば${result.shardYield.bankGainLetters}文字程度、判断には影響なし。</p><h3>出たら即止め</h3><p class="note">出た後も99連まで回すと効率は約1.1文字/連に半減。<b>出た時点で止めれば</b>持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連、素追いと同効率。</p><h3>向き・不向き</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素追いと同じ石効率にフェス限すり抜けが上乗せ。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連分返ってくる。</li><li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li></ul></div>`;
+  }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集種別ごとに引き継ぎ。フェス限で99連止めしておけば、<b>次の限定をチャージ99で開始できる</b>。指名は<b>素体所持・初回ボーナス未受領の生徒</b>（制服ネル等）。引ければ重複100＋ボーナス100の200文字。</p><h3>カウンタは無駄にならない</h3><p>途中で出てもカウンタは<b>積み直し</b>。99連完走時の残カウンタ期待値は${result.banking.expectedCharge.toFixed(0)}、持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>。暴発で台無しにはならない。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>持ち出しは99連−短縮分の<b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。掘り効率（補填込み）${result.banking.chaseRate.toFixed(2)}文字/連で換算して<b>${result.banking.costLetters.toFixed(0)}文字</b>の支出。対する受け取りは以下。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">${result.banking.lettersFromStar3.toFixed(0)}文字<small>50欠片=10文字換算</small></td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで支出を超過。星3と欠片は丸ごと上乗せ。<b>指名生徒の文字を取り切りたい先生には得。</b></p><p class="note">同じ99連ならフェス限期間のほうが欠片約${result.shardYield.bankGain}枚多い。凸に回せる分に割り引けば${result.shardYield.bankGainLetters}文字程度、判断には影響なし。</p><h3>出たら即止め</h3><p class="note">出た後も99連まで回すと効率は約1.1文字/連に半減。<b>出た時点で止めれば</b>持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連、素追いと同効率。</p><h3>向き・不向き</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素追いと同じ石効率にフェス限すり抜けが上乗せ。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連分返ってくる。</li><li><b>損</b>：文字の受け皿が無い先生。石で欠片と使わない星3を買うだけ。分かれ目は指名生徒1体分の文字に使い道があるか。</li></ul></div>`;
   return `<section class="panel"><h2>狙う人数で選ぶ</h2><p>結論は狙う人数で変わる。該当するタブに、費用から降りどきまでを集約。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
@@ -707,17 +714,17 @@ function summarySection(result) {
   const f3 = result.blockRun[3].focus;
   const s3 = result.blockRun[3].sequential;
   const marginal = (f3.letters - s3.letters) / (f3.pulls - s3.pulls);
-  return `<section class="panel"><h2>まとめ</h2><p class="verdict"><b>結論：あまり気にしないで大丈夫。</b></p><p class="note">長年の最適解と信じられてきた「一人の生徒を連打し続ける」作戦は、検算すると追加の1連が<b>${marginal.toFixed(2)}文字</b>——指名掘りの基準<b>${result.banking.lettersPerPull.toFixed(2)}文字/連</b>を大きく下回る非効率な打ち方だった。新仕様でこの打ち方が消えても、失うものは思ったより小さい。</p><p class="note">唯一の例外は、4名を最小の石でしのぐ<b>早抜けの生存戦略</b>（差引−16文字で旧仕様優位）。ここだけは新仕様で選択肢が消える。</p></section>`;
+  return `<section class="panel"><h2>まとめ</h2><p class="verdict"><b>結論：あまり気にしないで大丈夫。</b></p><p class="note">長年の最適解と信じられてきた「一人の生徒を連打し続ける」作戦は、検算すると追加の1連が<b>${marginal.toFixed(2)}文字</b>——掘りの基準<b>${result.banking.chaseRate.toFixed(2)}文字/連（補填込み）</b>を大きく下回る非効率な打ち方だった。新仕様でこの打ち方が消えても、失うものは思ったより小さい。</p><p class="note">唯一の例外は、4名を最小の石でしのぐ<b>早抜けの生存戦略</b>（差引−16文字で旧仕様優位）。ここだけは新仕様で選択肢が消える。</p></section>`;
 }
 
 function verdictLines(result, target, withSpook) {
-  const rate = result.banking.lettersPerPull;
+  const rate = result.banking.chaseRate;
   const line = (plan, label) => {
     const saved = plan.pulls - withSpook.expectedPulls;
     const lost = plan.letters - withSpook.letters;
     const recovered = saved * rate;
     const net = recovered - lost;
-    return `<p class="verdict">${label}<b>呼出チャージは${stone(saved)}石安くなる代わりに${Math.round(lost)}文字減少。</b>浮いた${saved.toFixed(1)}連を期待値90連の200文字掘りに回すと${Math.round(recovered)}文字相当——差引${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net))}文字で<b>${net >= 0 ? '呼出チャージ' : '呼出ポイント'}優位</b>。</p>`;
+    return `<p class="verdict">${label}<b>呼出チャージは${stone(saved)}石安くなる代わりに${Math.round(lost)}文字減少。</b>浮いた${saved.toFixed(1)}連を文字掘り（補填込み${rate.toFixed(2)}文字/連）に回すと${Math.round(recovered)}文字相当——差引${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net))}文字で<b>${net >= 0 ? '呼出チャージ' : '呼出ポイント'}優位</b>。</p>`;
   };
   if (target === 2) return line(result.blockRun[2].focus, '');
   return line(result.blockRun[target].focus, '<b>対・イロハ集中</b>｜')
@@ -759,7 +766,7 @@ function renderFestivalHtml(result) {
   const rates = result.rates;
   const banking = result.banking;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5.5フェス限の新旧比較</title><link rel="stylesheet" href="css/festival.css"></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5フェス限の新旧比較</h1>${GITHUB_LINK}</div><p class="lead">フェス限すり抜け確率が高いため、通常の募集と比べて変数が多い。5.5周年のフェス限ガチャの新旧比較検証を机上で行う。</p></header>
-<section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率 <b>${pct(rates.festivalStar3)}</b>。</li><li>指名1名の排出率 <b>${pct(rates.namedPu)}</b>。呼出チャージはチャージ99で50%、199で100%。</li><li>新旧フェス限10名−指名中1名の<b>9名</b>で <b>${pct(rates.spookPoolTotal)}</b> を等分、1名 <b>${pct(rates.spookEach)}</b>。</li><li>残り <b>${pct(rates.otherStar3)}</b> は恒常星3。内訳の記録のみ、計算には不使用。</li><li>初回PUボーナスは<b>指名PU自引きと呼出ポイント交換</b>のみ。すり抜けでは付かない。</li><li>素体なしを優先指名。全員素体済みなら素体持ちを指名してボーナス回収。</li><li>文字と欠片は別勘定。欠片は在庫潤沢な先生が多く、同じ重みでは扱えない。</li><li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li></ul></details></section>
+<section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率 <b>${pct(rates.festivalStar3)}</b>。</li><li>指名1名の排出率 <b>${pct(rates.namedPu)}</b>。呼出チャージはチャージ99で50%、199で100%。</li><li>新旧フェス限10名−指名中1名の<b>9名</b>で <b>${pct(rates.spookPoolTotal)}</b> を等分、1名 <b>${pct(rates.spookEach)}</b>。</li><li>残り <b>${pct(rates.otherStar3)}</b> は恒常星3。内訳の記録のみ、計算には不使用。</li><li>初回PUボーナスは<b>指名PU自引きと呼出ポイント交換</b>のみ。すり抜けでは付かない。</li><li>素体なしを優先指名。全員素体済みなら素体持ちを指名してボーナス回収。</li><li>文字と欠片は別勘定。欠片は在庫潤沢な先生が多く、同じ重みでは扱えない。</li><li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li><li>文字目的のPU狙い（期待90連）の補填では、2.3%（3%−0.7%）で星3が登場し50欠片＝10文字分を得るものとする。ボーナス未取得のフェス限（固有3以下の制服ネル等）が残っていれば更に得だが、できない先生もいるため新仕様不利側の値を採用。</li></ul></details></section>
 ${retreatSection(result)}
 ${summarySection(result)}
 <footer>Generated by scripts/festival.js</footer></main>
@@ -783,7 +790,7 @@ const ENGLISH_REPLACEMENTS = [
   ],
   ['<summary>計算に使う前提</summary>', '<summary>Assumptions</summary>'],
   [
-    '<li>文字と欠片は別勘定。欠片は在庫潤沢な先生が多く、同じ重みでは扱えない。</li><li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li>',
+    '<li>文字と欠片は別勘定。欠片は在庫潤沢な先生が多く、同じ重みでは扱えない。</li>',
     '<li>Eleph and shards are counted separately. Most players sit on a large shard stock, so shards cannot carry the same weight as Eleph.</li>',
   ],
   ['<li>フェス限定募集の星3排出率 <b>6.00%</b>。</li>', '<li>The 3★ rate during festival recruitment is <b>6.00%</b>.</li>'],
@@ -808,6 +815,17 @@ const ENGLISH_REPLACEMENTS = [
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
   ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
+  [
+    '<li>欠片の取り分はフェス限10連80枚（平常時50枚）扱い。新旧共通のため比較に影響なし。</li>',
+    '<li>Shard yield is treated as 80 per ten pulls during the festival (50 normally). Identical under both systems, so it does not affect the comparison.</li>',
+  ],
+  ['文字/連）に回すと', ' Eleph per pull) and they return about '],
+  ['文字<small>50欠片=10文字換算</small>', ' Eleph<small>50 shards = 10 Eleph</small>'],
+  [
+    '<li>文字目的のPU狙い（期待90連）の補填では、2.3%（3%−0.7%）で星3が登場し50欠片＝10文字分を得るものとする。ボーナス未取得のフェス限（固有3以下の制服ネル等）が残っていれば更に得だが、できない先生もいるため新仕様不利側の値を採用。</li>',
+    '<li>The Eleph-chase top-up assumes non-pickup 3★ at 2.3% (3% − 0.7%), each worth 50 shards = 10 Eleph. Players still holding bonus-unclaimed festival students (a UE3-or-below Nel, say) do better, but not everyone can, so the value unfavourable to the new system is used.</li>',
+  ],
+
   ['<h2>まとめ</h2>', '<h2>Bottom line</h2>'],
   ['<p class="verdict"><b>結論：あまり気にしないで大丈夫。</b></p>', '<p class="verdict"><b>Verdict: nothing much to worry about.</b></p>'],
   [
@@ -815,11 +833,11 @@ const ENGLISH_REPLACEMENTS = [
     '<p class="note">The long-trusted optimum — hammering a single student — turns out, on inspection, to earn just <b>',
   ],
   [
-    '文字</b>——指名掘りの基準<b>',
+    '文字</b>——掘りの基準<b>',
     ' Eleph</b> per extra pull, well under the <b>',
   ],
   [
-    '文字/連</b>を大きく下回る非効率な打ち方だった。新仕様でこの打ち方が消えても、失うものは思ったより小さい。</p>',
+    '文字/連（補填込み）</b>を大きく下回る非効率な打ち方だった。新仕様でこの打ち方が消えても、失うものは思ったより小さい。</p>',
     ' Eleph-per-pull</b> benchmark of a pickup chase. Losing that play to the new system costs less than it seemed.</p>',
   ],
   [
@@ -842,7 +860,7 @@ const ENGLISH_REPLACEMENTS = [
   ['<b>呼出チャージは', '<b>Recruitment Charge saves '],
   ['石安くなる代わりに', ' Pyroxene at the cost of '],
   ['文字減少。</b>浮いた', ' Eleph.</b> Spend the freed '],
-  ['連を期待値90連の200文字掘りに回すと', ' pulls on a 200-Eleph chase (expected 90 pulls) and they return about '],
+  ['連を文字掘り（補填込み', ' pulls on an Eleph chase (topped-up rate '],
   ['文字相当——差引+', ' Eleph — net +'],
   ['文字相当——差引−', ' Eleph — net −'],
   ['文字で<b>呼出ポイント優位</b>。</p>', ' Eleph: <b>Recruitment Points wins</b>.</p>'],
@@ -965,7 +983,7 @@ const ENGLISH_REPLACEMENTS = [
   ['">平均', '">avg '],
   ['<h3>収支</h3>', '<h3>The ledger</h3>'],
   ['<p>持ち出しは99連−短縮分の<b>', '<p>Netting the shortening out of 99 pulls leaves an outlay of <b>'],
-  ['石）。指名追いの効率', ' Pyroxene). Chasing the selected student runs at '],
+  ['石）。掘り効率（補填込み）', ' Pyroxene). The chase runs at a topped-up '],
   ['文字/連で換算して<b>', ' Eleph per pull, so in Eleph that is <b>'],
   ['文字</b>の支出。対する受け取りは以下。</p>', ' Eleph</b> spent. Here is what comes back.</p>'],
   ['<th>受け取るもの</th>', '<th>Received</th>'],
