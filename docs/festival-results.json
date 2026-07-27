@@ -6896,7 +6896,12 @@
     "survivalToBank": 0.49885646057991173,
     "festivalStar3PerBank": 5.9399999999999995,
     "limitedStar3PerBank": 2.9699999999999998,
-    "savedPulls": 53.02687366711282
+    "savedPulls": 53.02687366711282,
+    "carryPulls": 45.97312633288718,
+    "carryStones": 5516.775159946462,
+    "otherStar3Normal": 0.023,
+    "otherStar3Festival": 0.044,
+    "extraStar3PerBank": 2.0789999999999997
   },
   "audit": {
     "maxMassError": 7.882583474838611e-15

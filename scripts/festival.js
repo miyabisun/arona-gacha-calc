@@ -18,6 +18,7 @@ const { localizeShell, replaceExact } = require('./localize.js');
 const NORMAL_PU_RATE = 0.007;
 const FES_STAR3_RATE = 0.06;
 const LIMITED_STAR3_RATE = 0.03;
+const NORMAL_BANNER_STAR3_RATE = 0.03;
 const BANK_PULLS = 99;
 // 文字(エレフ)の入手。PU枠は重複でも100、すり抜け枠の重複は30。
 const BONUS_LETTERS = 100;
@@ -518,6 +519,13 @@ function calculateFestival() {
     limitedStar3PerBank: LIMITED_STAR3_RATE * BANK_PULLS,
   };
   banking.savedPulls = banking.expectedPullsPlain - banking.expectedPullsBanked;
+  // 仕込みに使った99連のうち、持ち越しで取り返せない分。ここが実質の持ち出し。
+  banking.carryPulls = BANK_PULLS - banking.savedPulls;
+  banking.carryStones = banking.carryPulls * PYROXENE_PER_PULL;
+  // PU以外の星3。平常時は2.3%、フェス限は指名PUとフェス限プールを除いた4.4%。
+  banking.otherStar3Normal = NORMAL_BANNER_STAR3_RATE - NORMAL_PU_RATE;
+  banking.otherStar3Festival = FES_STAR3_RATE - NORMAL_PU_RATE - SPOOK_TOTAL_RATE;
+  banking.extraStar3PerBank = (banking.otherStar3Festival - banking.otherStar3Normal) * BANK_PULLS;
 
   // 「本命1名を狙い続ける」意味を、開始時の素体0人/1人の2ケースで測る。
   const focusPlans = [
@@ -765,7 +773,7 @@ ${retreatSection(result)}
 <section class="panel"><h2>新仕様の言い分：石が安く済む</h2><p>ここまでは同じ連数を積んだ場合の話でした。新仕様の主張は<b>そもそも積む石が少なくて済む</b>ことで、これは事実です。素体をそろえた時点で降りられるなら、浮いた石はそのまま次の限定・恒常募集へ回せます。</p><h3>素体をそろえるまでの費用</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result).join('')}</tbody></table><p class="note">2名なら1,441石、12連ぶん安く上がります。ただし差は狙う人数が増えるほど縮み、<b>4名では逆に呼出ポイントのほうが268石安くなります</b>。新仕様の強みは、狙う人数が少ないときに限って効きます。</p><h3>同じ石を積んだ場合に持ち帰る文字</h3><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result).join('')}</tbody></table><p class="note">同じ石を積むなら、旧仕様のほうが400連で64〜70文字多く持ち帰ります。浮く石の12連ぶんを恒常募集へ回しても星3は0.36人ぶんで、64文字は固有2の19%にあたります。この二つを同じ物差しで比べることはできません。それでも、降りられる代わりに毎回この差を払い続けることになります。</p></section>
 <section class="panel"><h2>旧仕様なら上振れを選びにいける</h2><p>先に断っておくと、<b>2名を狙うだけなら、どちらの仕様でも大差はありません</b>。呼出ポイントはほぼ確実に200連ぶんの石を持っていかれますが、そのかわり<b>${(result.twoPuBranch.bothArrived * 100).toFixed(1)}%</b>の確率で交換枠がまるごと余ります。余った枠は100文字、既所持の制服ネルへ回せば200文字。差はその程度です。</p><p>違いがはっきりするのは3名以上を狙うときです。呼出ポイントは<b>水着イロハを指名し続けたまま、200連ごとの交換枠を使い分けられます</b>。この自由度が新仕様には存在しません。</p><p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p><p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p><h3>400連・交換2枠の使い道</h3><table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>交換枠の流し先</th><th>持ち帰る文字</th><th>イロハ固有2</th><th>イブキ確保</th></tr></thead><tbody>${exchangePlanRows(result).join('')}</tbody></table><p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p><h3>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h3>${jointTable(result, 400, 'subThenMain')}<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p></section>
 <section class="panel"><h2>1連の重さは違うが、決め手にはならない</h2><p>ここまで石は「何連引けるか」としてだけ数えてきました。ですが1連から返ってくるものも期間で違います。フェス限定募集は星3が6%へ倍化するので、同じ10連でも手元に残る欠片が増えます。</p><table><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><thead><tr><th>引いた量</th><th>平常時</th><th>フェス限期間</th></tr></thead><tbody><tr><th>10連（1,200石）</th><td data-label="平常時">${result.shardYield.perPullNormal * 10}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perPullFestival * 10}欠片</td></tr><tr><th>200連（24,000石）</th><td data-label="平常時">${result.shardYield.perBlockNormal.toLocaleString('ja-JP')}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perBlockFestival.toLocaleString('ja-JP')}欠片</td></tr><tr><th>200連あたりの差</th><td colspan="2" data-label="差">${result.shardYield.blockGain}欠片（文字に直して約${result.shardYield.blockGainLetters}文字）</td></tr></tbody></table><p class="note">この差は指名にも交換にも関係なく、引いた回数だけで付いてきます。ただし<b>拾った欠片がそのまま戦力になるわけではありません</b>。多くの生徒は育成対象にならず、育てる生徒は先に欠片交換で固有2まで上げ終えています。実際に凸へ回せるのは多く見ても1割程度で、しかも安い交換段は使い切っているので5欠片で1文字です。</p><p class="note">そう割り引くと、200連あたり<b>${result.shardYield.blockGain}欠片</b>の差は実質<b>${result.shardYield.blockGainLetters}文字</b>ぶんにしかなりません。フェス限期間に引くほうが得なのは確かですが、<b>仕様の優劣を動かすほどの差ではありません</b>。</p><p class="note">欠片の枚数も、使える割合の1割も、体感からの概算です。星2・星1の内訳が確定すれば数字は動きますが、名目の欠片数ほどには効かないという結論は変わりません。</p></section>
-<section class="panel"><h2>99連を次の限定募集へ持ち越す</h2><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p><p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>${result.banking.guaranteedWithinBanked}連目</b>には199の確定枠へ届きます。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>1人を確保するまで</th><th>期待</th><th>最大</th><th>短縮</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待">${result.banking.expectedPullsPlain.toFixed(1)}連</td><td data-label="最大">${result.banking.guaranteedWithinPlain}連</td><td data-label="短縮">—</td></tr><tr><th>チャージ99から</th><td data-label="期待" class="best">${result.banking.expectedPullsBanked.toFixed(1)}連</td><td data-label="最大" class="best">${result.banking.guaranteedWithinBanked}連</td><td data-label="短縮" class="best">−${result.banking.savedPulls.toFixed(1)}連</td></tr></tbody></table><p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p><p class="note">同じ99連なら、星3が倍のフェス限期間に引くほうが欠片は約<b>${result.shardYield.bankGain}枚</b>多く残ります。もっとも実際に凸へ回せる分に割り引けば<b>${result.shardYield.bankGainLetters}文字</b>ほどで、これは判断を変える大きさではありません。<b>この作戦の値打ちは、あくまでチャージ99を次の募集へ持ち込めることにあります。</b></p><p class="note">ただし、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>${pct(result.banking.survivalToBank)}</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p></section>
+<section class="panel"><h2>99連を次の限定募集へ持ち越す</h2><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で貯めたチャージは<b>次の限定募集やフェス限定募集</b>へ、恒常募集のチャージは次の恒常募集へ持ち越せます。</p><p>そこで、フェス限定募集の期間に<b>99連まで進めて止めておき</b>、次の限定募集をチャージ99の状態で始める作戦が成立します。1連目にいきなり50%の確定枠が来て、外しても<b>${result.banking.guaranteedWithinBanked}連目</b>には199の確定枠へ届きます。</p><table><colgroup><col style="width:34%"><col style="width:22%"><col style="width:22%"><col style="width:22%"></colgroup><thead><tr><th>1人を確保するまで</th><th>期待</th><th>最大</th><th>短縮</th></tr></thead><tbody><tr><th>チャージ0から</th><td data-label="期待">${result.banking.expectedPullsPlain.toFixed(1)}連</td><td data-label="最大">${result.banking.guaranteedWithinPlain}連</td><td data-label="短縮">—</td></tr><tr><th>チャージ99から</th><td data-label="期待" class="best">${result.banking.expectedPullsBanked.toFixed(1)}連</td><td data-label="最大" class="best">${result.banking.guaranteedWithinBanked}連</td><td data-label="短縮" class="best">−${result.banking.savedPulls.toFixed(1)}連</td></tr></tbody></table><p class="note">持ち越したチャージは1人目にしか効かないため、短縮量は狙う人数によらず一定です。表の連数には、貯めるために使った99連そのものを含みません。</p><p class="note">同じ99連なら、星3が倍のフェス限期間に引くほうが欠片は約<b>${result.shardYield.bankGain}枚</b>多く残ります。もっとも実際に凸へ回せる分に割り引けば<b>${result.shardYield.bankGainLetters}文字</b>ほどで、これは判断を変える大きさではありません。</p><h3>闇鍋としての価値</h3><p>欠片とは別の見方もできます。PU以外の星3が出る率は、平常時が <b>${pct(result.banking.otherStar3Normal)}</b> なのに対しフェス限期間は <b>${pct(result.banking.otherStar3Festival)}</b>。同じ99連でも、フェス限のほうが恒常生徒を <b>${result.banking.extraStar3PerBank.toFixed(2)}人</b> 多く連れて帰る計算になります。</p><p class="note">チャージ99を持ち込めば次の募集が ${result.banking.savedPulls.toFixed(1)}連 短くなるので、99連のうち取り返せない持ち出しは <b>${result.banking.carryPulls.toFixed(1)}連</b>、${Math.round(result.banking.carryStones).toLocaleString('ja-JP')}石です。1万円で8,000石買える計算なら約${Math.round(result.banking.carryStones / 8000 * 10000).toLocaleString('ja-JP')}円。<b>その持ち出しで恒常星3を2人引いた</b>と読み替えれば、闇鍋としては割に合う買い物です。</p><p class="note">この2人は狙って出せるものではなく、育成対象になるかも分かりません。数字はあくまで「引かされた分の埋め合わせがどれくらいか」の目安です。</p><p class="note">ただし、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>${pct(result.banking.survivalToBank)}</b> です。199連まで貯めて次の募集を1連で終わらせる案は、そこへ到達する前に約87.5%がチャージを失うため実用になりません。</p></section>
 <section class="panel"><h2>実際にはどこで降りるのか</h2><p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p><h3>2PU（水着イロハ・水着イブキ）</h3><table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 2)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 2).join('')}</tbody></table><p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。</p><p class="note">どちらの場合も期待文字は300前後にとどまります。イブキが素体確保で十分な性能なら、これで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p><h3>3PU（水着イロハ・水着イブキ・制服ネル）</h3><table><colgroup><col style="width:28%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:15%"><col style="width:15%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 3)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 3).join('')}</tbody></table><p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p><h3>4PU（対象4名すべて）</h3><table><colgroup><col style="width:26%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 4)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 4).join('')}</tbody></table><p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p><p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
 <script src="js/festival.js" defer></script></body></html>`;
@@ -959,8 +967,49 @@ const ENGLISH_REPLACEMENTS = [
     ' more shards</b>. Discounted to what actually reaches a build, though, that is about <b>',
   ],
   [
-    '文字</b>ほどで、これは判断を変える大きさではありません。<b>この作戦の値打ちは、あくまでチャージ99を次の募集へ持ち込めることにあります。</b></p>',
-    ' Eleph</b> — not enough to sway the decision. <b>The value of this plan rests on carrying charge 99 into the next banner, nothing more.</b></p>',
+    '文字</b>ほどで、これは判断を変える大きさではありません。</p>',
+    ' Eleph</b> — not enough to sway the decision.</p>',
+  ],
+  ['<h3>闇鍋としての価値</h3>', '<h3>What the blind pulls are worth</h3>'],
+  [
+    '<p>欠片とは別の見方もできます。PU以外の星3が出る率は、平常時が <b>',
+    '<p>There is another way to look at it. The rate for 3★ students outside the pickup runs at <b>',
+  ],
+  [
+    '</b> なのに対しフェス限期間は <b>',
+    '</b> normally, against <b>',
+  ],
+  [
+    '</b>。同じ99連でも、フェス限のほうが恒常生徒を <b>',
+    '</b> during the festival. The same 99 pulls therefore bring home <b>',
+  ],
+  [
+    '人</b> 多く連れて帰る計算になります。</p>',
+    ' more</b> permanent students inside the festival.</p>',
+  ],
+  [
+    '<p class="note">チャージ99を持ち込めば次の募集が ',
+    '<p class="note">Carrying charge 99 forward shortens the next banner by ',
+  ],
+  [
+    '連 短くなるので、99連のうち取り返せない持ち出しは <b>',
+    ' pulls, so the part of those 99 you never get back is <b>',
+  ],
+  [
+    '連</b>、',
+    ' pulls</b>, or ',
+  ],
+  [
+    '石です。1万円で8,000石買える計算なら約',
+    ' Pyroxene. At 8,000 Pyroxene per 10,000 yen that is roughly ',
+  ],
+  [
+    '円。<b>その持ち出しで恒常星3を2人引いた</b>と読み替えれば、闇鍋としては割に合う買い物です。</p>',
+    ' yen. Read as <b>two permanent 3★ students bought with that outlay</b>, the blind pulls are not a bad deal.</p>',
+  ],
+  [
+    '<p class="note">この2人は狙って出せるものではなく、育成対象になるかも分かりません。数字はあくまで「引かされた分の埋め合わせがどれくらいか」の目安です。</p>',
+    '<p class="note">Those two cannot be aimed at, and there is no telling whether either will ever be built. The figure is only a gauge of how much the forced pulls give back.</p>',
   ],
   [
     '<p class="note">ただし、貯めている途中で指名した生徒を引き当てるとチャージは0に戻ります。99連を引ききってもチャージが残っている確率は <b>',
