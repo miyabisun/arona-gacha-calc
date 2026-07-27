@@ -622,6 +622,14 @@ const PU_TAB_LEAD = {
   4: 'これから始める先生が対象4名すべてを狙う想定です。',
 };
 
+const EXCHANGE_BLOCK = `<h3>旧仕様なら交換枠を選びにいける</h3><p>2名を狙うだけなら、どちらの仕様でも大差はありません。呼出ポイントはほぼ確実に200連ぶんの石を持っていかれますが、そのかわり一定の確率で交換枠がまるごと余ります。余った枠は100文字、既所持の制服ネルへ回せば200文字。差はその程度です。</p><p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、差が出ない部分です。差が出るのは2枠目、すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p><h4>400連・交換2枠の使い道</h4><table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>交換枠の流し先</th><th>持ち帰る文字</th><th>イロハ固有2</th><th>イブキ確保</th></tr></thead><tbody>__EXCHANGE_ROWS__</tbody></table><p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b></p><h4>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h4>__JOINT_TABLE__<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p>`;
+
+const PU_CLOSING = {
+  2: '<p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。期待文字はどちらも300前後で、イブキが素体確保で十分な性能ならこれで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p>',
+  3: '<p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p>',
+  4: '<p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p><p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p>',
+};
+
 function retreatSection(result) {
   const tabs = [...TARGETS.map((target) => `<button type="button" role="tab" id="tab-${target}pu" aria-controls="pu-panel" aria-selected="${target === 2}" tabindex="${target === 2 ? 0 : -1}" data-pu="${target}">${PU_TAB_NAMES[target]}</button>`),
     '<button type="button" role="tab" id="tab-bankpu" aria-controls="pu-panel" aria-selected="false" tabindex="-1" data-pu="bank">99連</button>'].join('');
@@ -630,9 +638,16 @@ function retreatSection(result) {
     const without = result.retreat[target].withoutSpook;
     const savedPulls = without.expectedPulls - withSpook.expectedPulls;
     const lostLetters = without.letters - withSpook.letters;
-    return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}素体がそろった時点で撤退する前提です。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>すべて指名で引く</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜けを含む実際</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜けで決着した割合</th><td colspan="2" data-label="すり抜けで決着">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。</p><p class="note">相方が素体確保で十分な性能なら、これは早く終わって得をした話です。相方にも固有2が要るなら、撤退せず指名を続けることになります。そのときは先に素体を持っているぶん、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になり、取り逃した100文字はそこで戻ります。</p></div>`;
+    const charge = result.scenarios.charge[target].expectedPullsToAllBase;
+    const point = result.scenarios.point[target].expectedPullsToAllBase;
+    const stoneGap = Math.abs(Math.round((point - charge) * PYROXENE_PER_PULL)).toLocaleString('ja-JP');
+    const cheaper = charge <= point ? '呼出チャージ' : '呼出ポイント';
+    return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}</p>
+<h3>素体をそろえるまで</h3><p>呼出チャージには交換がないので、狙った生徒を順番に指名して引き当てるしかありません。素体がそろった時点で撤退する前提で置きます。</p><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>そろえ方</th><th>期待募集回数</th><th>持ち帰る文字</th></tr></thead><tbody><tr><th>すべて指名で引く</th><td data-label="期待募集回数">${without.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字" class="best">${Math.round(without.letters)}文字</td></tr><tr><th>すり抜けを含む実際</th><td data-label="期待募集回数" class="best">${withSpook.expectedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">${Math.round(withSpook.letters)}文字</td></tr><tr><th>差</th><td data-label="期待募集回数">−${savedPulls.toFixed(1)}連</td><td data-label="持ち帰る文字">−${Math.round(lostLetters)}文字</td></tr><tr><th>すり抜けで決着した割合</th><td colspan="2" data-label="すり抜けで決着">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。相方にも固有2が要るなら撤退せず指名を続けることになり、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になって、取り逃した分はそこで戻ります。</p>
+<h3>石はどちらが安いか</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result, target).join('')}</tbody></table><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result, target).join('')}</tbody></table><p class="note">素体をそろえるだけなら${cheaper}が${stoneGap}石ぶん安く上がります。ただし同じ石を積んだときに持ち帰る文字は、一貫して呼出ポイントのほうが多い。降りられる代わりに、その差を毎回払い続ける形です。</p>
+${target === 2 ? EXCHANGE_BLOCK.replace('__EXCHANGE_ROWS__', exchangePlanRows(result).join('')).replace('__JOINT_TABLE__', jointTable(result, 400, 'subThenMain')) : ''}<h3>実際にはどこで降りるのか</h3><p>ここまでは連数を積み切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。そろい切った状態から、文字目当てに追加の200連を回すことはありません。</p><table><colgroup><col style="width:26%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, target)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, target).join('')}</tbody></table>${PU_CLOSING[target]}</div>`;
   }).join('') + `<div data-pu-panel="bank" hidden><p>呼出チャージは募集の種別ごとに引き継がれます。フェス限定募集で99連まで進めて止めておけば、<b>次の限定募集をチャージ99の状態で始められます</b>。ここで指名するのは<b>すでに素体を持っていて初回PUボーナスが未受領の生徒</b>（制服ネルなど）です。引き当てれば重複100文字と初回ボーナス100文字で200文字が入ります。</p><h3>まず、カウンタは無駄になりません</h3><p>99連のあいだに指名生徒が出るとカウンタは0へ戻りますが、<b>そこから先の外れはまた積み上がります</b>。99連を回しきった時点で手元に残るカウンタの期待値は${result.banking.expectedCharge.toFixed(0)}で、次の募集に持ち込める短縮は平均<b>${result.banking.expectedSaving.toFixed(1)}連</b>です。暴発したら全部台無し、にはなりません。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>99連を回した結果</th><th>確率</th><th>次の募集での短縮</th></tr></thead><tbody><tr><th>一度も出ずカウンタ99</th><td data-label="確率">${pct(result.banking.survivalToBank)}</td><td data-label="次の募集での短縮" class="best">${result.banking.savedPulls.toFixed(1)}連</td></tr><tr><th>途中で出た（カウンタは積み直し）</th><td data-label="確率">${pct(result.banking.hitChance)}</td><td data-label="次の募集での短縮">平均${result.banking.savingWhenHit.toFixed(1)}連</td></tr><tr><th>ならして</th><td data-label="確率">—</td><td data-label="次の募集での短縮">${result.banking.expectedSaving.toFixed(1)}連</td></tr></tbody></table><h3>収支</h3><p>99連から短縮分を差し引いた持ち出しは <b>${result.banking.carryPulls.toFixed(1)}連</b>（${stone(result.banking.carryPulls)}石）。指名を追う効率が1連あたり${result.banking.lettersPerPull.toFixed(2)}文字なので、文字に直すと<b>${result.banking.costLetters.toFixed(0)}文字</b>ぶんの支出です。受け取るほうを並べます。</p><table><colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>受け取るもの</th><th>期待</th><th>文字換算</th></tr></thead><tbody><tr><th>指名生徒（初回ボーナス込み）</th><td data-label="期待">${result.banking.expectedHits.toFixed(2)}体</td><td data-label="文字換算" class="best">${result.banking.lettersFromNamed.toFixed(0)}文字</td></tr><tr><th>フェス限9名プール</th><td data-label="期待">${result.banking.poolHits.toFixed(2)}件</td><td data-label="文字換算">${result.banking.lettersFromPool.toFixed(0)}文字＋欠片${result.banking.shardsFromPool.toFixed(0)}</td></tr><tr><th>恒常星3（限定で引いた場合との差）</th><td data-label="期待">+${result.banking.star3Net.toFixed(2)}体</td><td data-label="文字換算">—</td></tr><tr><th>合計</th><td data-label="期待">—</td><td data-label="文字換算" class="best">${result.banking.lettersTotal.toFixed(0)}文字</td></tr></tbody></table><p class="formula">支出 ${result.banking.costLetters.toFixed(0)}文字 ＜ 受け取り ${result.banking.lettersTotal.toFixed(0)}文字 ＋ 星3 ${result.banking.star3Net.toFixed(2)}体 ＋ 欠片 ${result.banking.shardsFromPool.toFixed(0)}</p><p class="note">文字だけで釣り合いを超えており、星3と欠片はまるごと上乗せです。<b>指名生徒の文字をまだ取り切りたい先生には、この仕込みは得になります。</b></p><h3>ただし、出たら必ず止めること</h3><p class="note">指名生徒が出たあとも99連まで回し続けると、その継続分の効率は1連あたり約1.1文字まで落ちます。<b>出た時点で止めれば</b>、持ち出しは${result.banking.stopOnHitCost.toFixed(1)}連ちょうど、つまり指名を素で追うのと同じ効率に収まります。</p><h3>向いている先生・向いていない先生</h3><ul class="rules"><li><b>得</b>：指名生徒の文字を取り切りたい先生。素で追うのと同じ石効率のまま、フェス限のすり抜けが丸ごと上乗せされます。外しても次の限定で平均${result.banking.expectedSaving.toFixed(1)}連ぶん返ってきます。</li><li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li></ul></div>`;
-  return `<section class="panel"><h2>新仕様は全員そろえるまで降りられない</h2><p>呼出チャージには交換がないので、狙った生徒は順番に指名して引き当てるしかありません。まず素体をそろえるまでの期待値を置き、そこにすり抜けが挟まると何が変わるかを見ます。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
+  return `<section class="panel"><h2>狙う人数で選ぶ</h2><p>結論は狙う人数によって変わります。自分に当てはまるタブを選べば、素体をそろえる費用から降りどきまで、その人数ぶんの話がひととおり読めます。</p><div class="tabs" role="tablist" aria-label="狙う人数">${tabs}</div><div id="pu-panel" role="tabpanel" aria-labelledby="tab-2pu">${panels}</div></section>`;
 }
 
 // フェス限を取り逃す選択肢は攻略上あり得ないので、1枠目は必ず相方の確保に使う。
@@ -668,8 +683,8 @@ function blockStopHead(result, targets) {
 }
 
 /** 素体をそろえるまでに何石かかるか。新仕様の言い分をそのまま数字にする。 */
-function costRows(result) {
-  return TARGETS.map((target) => {
+function costRows(result, only) {
+  return (only ? [only] : TARGETS).map((target) => {
     const charge = result.scenarios.charge[target].expectedPullsToAllBase;
     const point = result.scenarios.point[target].expectedPullsToAllBase;
     const gap = (point - charge) * PYROXENE_PER_PULL;
@@ -680,8 +695,8 @@ function costRows(result) {
 }
 
 /** 同じ連数を積んだ場合に持ち帰る文字。石あたりの実入りを比べる。 */
-function sameBudgetRows(result) {
-  return TARGETS.map((target) => {
+function sameBudgetRows(result, only) {
+  return (only ? [only] : TARGETS).map((target) => {
     const cells = [200, 400].map((pull) => {
       const charge = result.scenarios.charge[target].letters[pull];
       const point = result.scenarios.point[target].letters[pull];
@@ -731,7 +746,7 @@ function better(value, rival, preferHigh) {
 
 const FESTIVAL_TAB_JS = "const puTabs=[...document.querySelectorAll('[data-pu]')],puPanels=[...document.querySelectorAll('[data-pu-panel]')];const selectPu=value=>{puTabs.forEach(tab=>{const on=tab.dataset.pu===value;tab.setAttribute('aria-selected',String(on));tab.tabIndex=on?0:-1});puPanels.forEach(panel=>{panel.hidden=panel.dataset.puPanel!==value});document.getElementById('pu-panel').setAttribute('aria-labelledby','tab-'+value+'pu')};puTabs.forEach((tab,index)=>{tab.addEventListener('click',()=>selectPu(tab.dataset.pu));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();let next=index;if(event.key==='ArrowLeft')next=(index-1+puTabs.length)%puTabs.length;if(event.key==='ArrowRight')next=(index+1)%puTabs.length;if(event.key==='Home')next=0;if(event.key==='End')next=puTabs.length-1;puTabs[next].focus();selectPu(puTabs[next].dataset.pu)})});";
 
-const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:600;margin:0 0 8px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}.formula{font-variant-numeric:tabular-nums;background:var(--accent-subtle);border-radius:6px;padding:10px 12px;font-size:15px}details summary{cursor:pointer;font-weight:600;font-size:15px;padding:2px 0;color:var(--muted)}details[open] summary{margin-bottom:8px;color:var(--on)}summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.tabs{display:flex;gap:4px;margin:0 0 12px}.tabs button{flex:1 1 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--raised);color:var(--muted);font:500 15px/1.2 system-ui,sans-serif;cursor:pointer}.tabs button[aria-selected="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--on)}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}.nav{align-items:flex-end;justify-content:space-between}.nav-pages,.language-switch{display:flex;gap:16px}.language-switch{gap:4px;padding:0 0 8px;color:var(--muted);font-size:12px}.language-switch a,.language-switch span{padding:0 4px}.language-switch [aria-current="true"]{color:var(--on);font-weight:700}@media(max-width:700px){table{display:block}colgroup{display:none}thead{display:none}tbody{display:block}tbody+tbody th,tbody+tbody td{border-top:0}tr{display:block;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:0 0 8px}tbody th{display:block;border:0;border-bottom:1px solid var(--border);padding:0 0 5px;margin:0 0 5px;text-align:left;font-weight:700;white-space:normal}td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0;padding:3px 0;text-align:right}td:before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:500;text-align:left;flex:0 0 auto}td b,td small{display:inline;white-space:nowrap}td small{margin:0 0 0 4px}}';
+const FESTIVAL_CSS = ':root{color-scheme:light dark;--surface:#faf6ef;--raised:#fffdf8;--on:#3a2f28;--muted:#6f6257;--border:#e3d9c9;--accent:#9a6a00;--accent-subtle:rgba(154,106,0,.10);--link:#14506e;--series-charge:#14506e;--series-point:#9a6a00;--grid-minor:#e3d9c9;--grid-major:#a99c8e}*{box-sizing:border-box}html{background:var(--surface)}body{margin:0;background:var(--surface);color:var(--on);font-family:system-ui,sans-serif;font-size:16px;line-height:1.6}a{color:var(--link)}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}main{width:min(1100px,calc(100% - 24px));margin:24px auto}.nav{display:flex;gap:16px;margin-bottom:16px;border-bottom:1px solid var(--border)}.nav a{padding:8px 4px;color:var(--muted);font-size:15px;font-weight:500;text-decoration:none}.nav a[aria-current]{color:var(--on);border-bottom:2px solid var(--accent)}h1,h2{font-size:17px;font-weight:600;line-height:1.3}h3{font-size:15px;font-weight:700;margin:24px 0 10px;padding:0 0 5px;border-bottom:1px solid var(--border);color:var(--on)}h4{font-size:14px;font-weight:600;margin:16px 0 8px;color:var(--muted)}[data-pu-panel]>p:first-of-type{color:var(--muted);margin-bottom:4px}.hero{padding:16px 0 24px}.header-row{display:flex;align-items:center;justify-content:space-between;gap:16px}.hero h1{margin:0}.lead{color:var(--muted);margin:8px 0 0}.repo-link{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;text-decoration:none}.repo-link:hover{color:var(--link)}.repo-link svg{width:20px;height:20px;flex:none}.panel{background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:16px;margin:0 0 16px}.panel h2{margin:0 0 12px}.panel p{margin:0 0 12px}.panel p:last-child{margin-bottom:0}.rules{margin:0;padding:0;list-style:none}.rules li{padding:6px 0;border-bottom:1px dashed var(--border);font-size:15px}.rules li:last-child{border-bottom:0}.rules b{color:var(--accent)}.formula{font-variant-numeric:tabular-nums;background:var(--accent-subtle);border-radius:6px;padding:10px 12px;font-size:15px}details summary{cursor:pointer;font-weight:600;font-size:15px;padding:2px 0;color:var(--muted)}details[open] summary{margin-bottom:8px;color:var(--on)}summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.tabs{display:flex;gap:4px;margin:0 0 12px}.tabs button{flex:1 1 0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--raised);color:var(--muted);font:500 15px/1.2 system-ui,sans-serif;cursor:pointer}.tabs button[aria-selected="true"]{background:var(--accent-subtle);border-color:var(--accent);color:var(--on)}table{width:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;vertical-align:top}thead th{text-align:center;color:var(--muted);font-size:13px;font-weight:600}tbody th{text-align:left;font-size:14px;white-space:nowrap}tbody th.sub{color:var(--muted);font-weight:500}td b{display:block;font-size:15px;font-weight:600;white-space:nowrap}td small{display:block;color:var(--muted);font-size:11px;line-height:1.3;margin-bottom:4px}td small:last-child{margin-bottom:0}tbody+tbody th,tbody+tbody td{border-top:2px solid var(--grid-major)}b.best{color:var(--link)}b.best:after{content:"\\2009\\25B8";font-size:11px;vertical-align:1px}.best{color:var(--link);font-weight:600}.note{color:var(--muted);font-size:14px;margin:12px 0 0}footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}@media(max-width:760px){main{width:min(100% - 16px,1100px);margin:16px auto}.panel{padding:12px 8px}.hero{padding-top:8px}.repo-link span{display:none}th,td{padding:8px 4px}.rules li{font-size:14px}}@media(prefers-color-scheme:dark){:root{--surface:#191919;--raised:#232323;--on:#e6e6e6;--muted:#9a9a9a;--border:#333333;--accent:#e0a800;--accent-subtle:rgba(224,168,0,.15);--link:#7fdbff;--series-charge:#7fdbff;--series-point:#e0a800;--grid-minor:#333;--grid-major:#666}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}.nav{align-items:flex-end;justify-content:space-between}.nav-pages,.language-switch{display:flex;gap:16px}.language-switch{gap:4px;padding:0 0 8px;color:var(--muted);font-size:12px}.language-switch a,.language-switch span{padding:0 4px}.language-switch [aria-current="true"]{color:var(--on);font-weight:700}@media(max-width:700px){table{display:block}colgroup{display:none}thead{display:none}tbody{display:block}tbody+tbody th,tbody+tbody td{border-top:0}tr{display:block;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:0 0 8px}tbody th{display:block;border:0;border-bottom:1px solid var(--border);padding:0 0 5px;margin:0 0 5px;text-align:left;font-weight:700;white-space:normal}td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border:0;padding:3px 0;text-align:right}td:before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:500;text-align:left;flex:0 0 auto}td b,td small{display:inline;white-space:nowrap}td small{margin:0 0 0 4px}}';
 
 const GITHUB_LINK = '<a class="repo-link" href="https://github.com/miyabisun/arona-gacha-calc" aria-label="GitHubリポジトリを開く"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.7c0 5.4 3.5 6.5 6.8 7A4.8 4.8 0 0 0 8 18v4"/><path d="M8 19c-3 .9-3-1.5-4-2"/></svg><span>miyabisun/arona-gacha-calc</span></a>';
 
@@ -742,10 +757,7 @@ function renderFestivalHtml(result) {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5.5フェス限の新旧比較</title><link rel="stylesheet" href="css/festival.css"></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5フェス限の新旧比較</h1>${GITHUB_LINK}</div><p class="lead">フェス限定募集は星3が6%へ倍化し、指名していないフェス限生徒も出現します。この「すり抜け」で狙っている別の生徒が手に入るため、呼出ポイントの200連区切りが有利になる場面があります。</p></header>
 <section class="panel"><details><summary>計算に使う前提</summary><ul class="rules"><li>フェス限定募集の星3排出率は <b>${pct(rates.festivalStar3)}</b>。</li><li>指名した1名の排出率は <b>${pct(rates.namedPu)}</b>。呼出チャージではチャージ99で50%、199で100%。</li><li>新旧フェス限10名から指名中の1名を除いた<b>9名</b>が <b>${pct(rates.spookPoolTotal)}</b> を等分し、1名あたり <b>${pct(rates.spookEach)}</b>。</li><li>残る <b>${pct(rates.otherStar3)}</b> は恒常星3で、内訳として記録するだけで計算には使いません。</li><li>初回PUボーナスは<b>指名PUの自引きと呼出ポイント交換</b>でのみ得られます。すり抜けで確保しても付きません。</li><li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li><li>文字と欠片は分けて数えます。欠片は手持ちが潤沢な先生が多く、文字と同じ重みでは扱えないためです。</li></ul></details></section>
 ${retreatSection(result)}
-<section class="panel"><h2>新仕様の言い分：石が安く済む</h2><p>ここまでは同じ連数を積んだ場合の話でした。新仕様の主張は<b>そもそも積む石が少なくて済む</b>ことで、これは事実です。素体をそろえた時点で降りられるなら、浮いた石はそのまま次の限定・恒常募集へ回せます。</p><h3>素体をそろえるまでの費用</h3><table><colgroup><col style="width:22%"><col style="width:30%"><col style="width:30%"><col style="width:18%"></colgroup><thead><tr><th>狙う人数</th><th>呼出チャージ</th><th>呼出ポイント</th><th>差</th></tr></thead><tbody>${costRows(result).join('')}</tbody></table><p class="note">2名なら1,441石、12連ぶん安く上がります。ただし差は狙う人数が増えるほど縮み、<b>4名では逆に呼出ポイントのほうが268石安くなります</b>。新仕様の強みは、狙う人数が少ないときに限って効きます。</p><h3>同じ石を積んだ場合に持ち帰る文字</h3><table><colgroup><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:14%"></colgroup><thead><tr><th rowspan="2">狙う人数</th><th colspan="3">200連（24,000石）</th><th colspan="3">400連（48,000石）</th></tr><tr><th>チャージ</th><th>ポイント</th><th>差</th><th>チャージ</th><th>ポイント</th><th>差</th></tr></thead><tbody>${sameBudgetRows(result).join('')}</tbody></table><p class="note">同じ石を積むなら、旧仕様のほうが400連で64〜70文字多く持ち帰ります。浮く石の12連ぶんを恒常募集へ回しても星3は0.36人ぶんで、64文字は固有2の19%にあたります。この二つを同じ物差しで比べることはできません。それでも、降りられる代わりに毎回この差を払い続けることになります。</p></section>
-<section class="panel"><h2>旧仕様なら上振れを選びにいける</h2><p>先に断っておくと、<b>2名を狙うだけなら、どちらの仕様でも大差はありません</b>。呼出ポイントはほぼ確実に200連ぶんの石を持っていかれますが、そのかわり<b>${(result.twoPuBranch.bothArrived * 100).toFixed(1)}%</b>の確率で交換枠がまるごと余ります。余った枠は100文字、既所持の制服ネルへ回せば200文字。差はその程度です。</p><p>違いがはっきりするのは3名以上を狙うときです。呼出ポイントは<b>水着イロハを指名し続けたまま、200連ごとの交換枠を使い分けられます</b>。この自由度が新仕様には存在しません。</p><p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p><p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p><h3>400連・交換2枠の使い道</h3><table><colgroup><col style="width:40%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup><thead><tr><th>交換枠の流し先</th><th>持ち帰る文字</th><th>イロハ固有2</th><th>イブキ確保</th></tr></thead><tbody>${exchangePlanRows(result).join('')}</tbody></table><p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p><h3>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h3>${jointTable(result, 400, 'subThenMain')}<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p></section>
 <section class="panel"><h2>1連の重さは違うが、決め手にはならない</h2><p>ここまで石は「何連引けるか」としてだけ数えてきました。ですが1連から返ってくるものも期間で違います。フェス限定募集は星3が6%へ倍化するので、同じ10連でも手元に残る欠片が増えます。</p><table><colgroup><col style="width:34%"><col style="width:33%"><col style="width:33%"></colgroup><thead><tr><th>引いた量</th><th>平常時</th><th>フェス限期間</th></tr></thead><tbody><tr><th>10連（1,200石）</th><td data-label="平常時">${result.shardYield.perPullNormal * 10}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perPullFestival * 10}欠片</td></tr><tr><th>200連（24,000石）</th><td data-label="平常時">${result.shardYield.perBlockNormal.toLocaleString('ja-JP')}欠片</td><td data-label="フェス限期間" class="best">${result.shardYield.perBlockFestival.toLocaleString('ja-JP')}欠片</td></tr><tr><th>200連あたりの差</th><td colspan="2" data-label="差">${result.shardYield.blockGain}欠片（文字に直して約${result.shardYield.blockGainLetters}文字）</td></tr></tbody></table><p class="note">この差は指名にも交換にも関係なく、引いた回数だけで付いてきます。ただし<b>拾った欠片がそのまま戦力になるわけではありません</b>。多くの生徒は育成対象にならず、育てる生徒は先に欠片交換で固有2まで上げ終えています。実際に凸へ回せるのは多く見ても1割程度で、しかも安い交換段は使い切っているので5欠片で1文字です。</p><p class="note">そう割り引くと、200連あたり<b>${result.shardYield.blockGain}欠片</b>の差は実質<b>${result.shardYield.blockGainLetters}文字</b>ぶんにしかなりません。フェス限期間に引くほうが得なのは確かですが、<b>仕様の優劣を動かすほどの差ではありません</b>。</p><p class="note">欠片の枚数も、使える割合の1割も、体感からの概算です。星2・星1の内訳が確定すれば数字は動きますが、名目の欠片数ほどには効かないという結論は変わりません。</p></section>
-<section class="panel"><h2>実際にはどこで降りるのか</h2><p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p><h3>2PU（水着イロハ・水着イブキ）</h3><table><colgroup><col style="width:28%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 2)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 2).join('')}</tbody></table><p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。</p><p class="note">どちらの場合も期待文字は300前後にとどまります。イブキが素体確保で十分な性能なら、これで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p><h3>3PU（水着イロハ・水着イブキ・制服ネル）</h3><table><colgroup><col style="width:28%"><col style="width:14%"><col style="width:14%"><col style="width:14%"><col style="width:15%"><col style="width:15%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 3)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 3).join('')}</tbody></table><p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p><p class="note">7,837石を積んで76文字を買う取引だと言い換えられます。アタッカーの固有2を急ぐなら悪くありませんが、素体をそろえて次の募集へ石を残したいなら、素直に引けた順で乗り換えるほうが安く上がります。<b>この判断を先生が持てること自体が、呼出ポイントにしかない性質です。</b></p><h3>4PU（対象4名すべて）</h3><table><colgroup><col style="width:26%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"></colgroup><thead><tr><th>進め方</th>${blockStopHead(result, 4)}<th>期待消費</th><th>期待文字</th></tr></thead><tbody>${blockStopRows(result, 4).join('')}</tbody></table><p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p><p class="note">ここまで来ると、集中か乗り換えかという話より<b>そもそも簡単には降りられない</b>ことのほうが重くのしかかります。新規の先生が4名を狙うのは、どちらの仕様でもそれだけ重い挑戦です。</p></section>
 <footer>Generated by scripts/festival.js</footer></main>
 <script src="js/festival.js" defer></script></body></html>`;
 }
@@ -791,15 +803,14 @@ const ENGLISH_REPLACEMENTS = [
     '<li>素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収します。</li>',
     '<li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li>',
   ],
-  ['<h2>新仕様は全員そろえるまで降りられない</h2>', '<h2>Recruitment Charge gives you no exit</h2>'],
+  ['<h2>狙う人数で選ぶ</h2>', '<h2>Pick your target count</h2>'],
   [
-    '<p>呼出チャージには交換がないので、狙った生徒は順番に指名して引き当てるしかありません。まず素体をそろえるまでの期待値を置き、そこにすり抜けが挟まると何が変わるかを見ます。</p>',
-    '<p>Recruitment Charge has no exchange, so every student you want has to be selected and pulled in turn. Start from the expected cost of simply owning them, then see what changes when an off-target pull lands.</p>',
+    '<p>結論は狙う人数によって変わります。自分に当てはまるタブを選べば、素体をそろえる費用から降りどきまで、その人数ぶんの話がひととおり読めます。</p>',
+    '<p>The answer depends on how many students you are after. Pick the tab that matches you and the whole case for that count reads through in one place, from the cost of owning everyone to when to walk away.</p>',
   ],
   ['新規の先生が水着イロハと水着イブキを狙う想定です。', 'A new player going after Swimsuit Iroha and Swimsuit Ibuki.'],
   ['制服ネルかリオをすり抜けで確保済みの先生が、残り3名を狙う想定です。', 'A player who already picked up Uniform Nel or Rio, going after the other three.'],
   ['これから始める先生が対象4名すべてを狙う想定です。', 'A player starting now, going after all four featured students.'],
-  ['素体がそろった時点で撤退する前提です。', 'The run stops as soon as every student is owned.'],
   ['<th>そろえ方</th>', '<th>How they arrive</th>'],
   ['<th>期待募集回数</th>', '<th>Expected pulls</th>'],
   ['<th>持ち帰る文字</th>', '<th>Eleph earned</th>'],
@@ -807,20 +818,6 @@ const ENGLISH_REPLACEMENTS = [
   ['<th>すり抜けを含む実際</th>', '<th>Including off-target</th>'],
   ['<th>すり抜けで決着した割合</th>', '<th>Settled by an off-target pull</th>'],
   ['aria-label="狙う人数"', 'aria-label="Number of students targeted"'],
-  [
-    '<p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。</p>',
-    '<p class="note">When an off-target pull delivers a partner, that student never has to be selected, so the run ends sooner. In exchange the first-time bonus that selecting would have paid never arrives, and the Eleph haul shrinks.</p>',
-  ],
-  [
-    '<p class="note">相方が素体確保で十分な性能なら、これは早く終わって得をした話です。相方にも固有2が要るなら、撤退せず指名を続けることになります。そのときは先に素体を持っているぶん、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になり、取り逃した100文字はそこで戻ります。</p>',
-    '<p class="note">If simply owning the partner is enough, finishing early is a straight win. If the partner also needs UE2, you keep selecting instead of walking away — and because the unit is already owned, the next hit pays 100 Eleph for the duplicate plus the unspent 100 Eleph bonus, <b>200 Eleph</b> in one go. The 100 you appeared to lose comes back there.</p>',
-  ],
-  ['<h2>新仕様の言い分：石が安く済む</h2>', '<h2>The case for Recruitment Charge: it costs less</h2>'],
-  [
-    '<p>ここまでは同じ連数を積んだ場合の話でした。新仕様の主張は<b>そもそも積む石が少なくて済む</b>ことで、これは事実です。素体をそろえた時点で降りられるなら、浮いた石はそのまま次の限定・恒常募集へ回せます。</p>',
-    '<p>Everything above assumed the same number of pulls. The case for the new system is that <b>fewer pulls are needed in the first place</b> — and that is true. If you can walk away once every student is owned, the Pyroxene you never spent carries straight into the next limited or standard banner.</p>',
-  ],
-  ['<h3>素体をそろえるまでの費用</h3>', '<h3>Cost to own every student</h3>'],
   ['<td data-label="差">新が', '<td data-label="Gap">Charge by '],
   ['<td data-label="差">旧が', '<td data-label="Gap">Points by '],
   ['石安い</td>', ' Pyroxene</td>'],
@@ -829,24 +826,53 @@ const ENGLISH_REPLACEMENTS = [
   ['文字</td>', ' Eleph</td>'],
   ['連<small>', ' pulls<small>'],
   ['石</small>', ' Pyroxene</small>'],
-  [
-    '<p class="note">2名なら1,441石、12連ぶん安く上がります。ただし差は狙う人数が増えるほど縮み、<b>4名では逆に呼出ポイントのほうが268石安くなります</b>。新仕様の強みは、狙う人数が少ないときに限って効きます。</p>',
-    '<p class="note">Targeting two students saves 1,441 Pyroxene, about twelve pulls. The gap narrows as you target more, and <b>at four students Recruitment Points is actually 268 Pyroxene cheaper</b>. The new system\'s advantage holds only when you are after a small number of students.</p>',
-  ],
-  ['<h3>同じ石を積んだ場合に持ち帰る文字</h3>', '<h3>Eleph earned for the same Pyroxene</h3>'],
   ['<th rowspan="2">狙う人数</th>', '<th rowspan="2">Students</th>'],
   ['<th colspan="3">200連（24,000石）</th>', '<th colspan="3">200 pulls (24,000 Pyroxene)</th>'],
   ['<th colspan="3">400連（48,000石）</th>', '<th colspan="3">400 pulls (48,000 Pyroxene)</th>'],
   ['<th>チャージ</th>', '<th>Charge</th>'],
   ['<th>ポイント</th>', '<th>Points</th>'],
+  ['<h3>素体をそろえるまで</h3>', '<h3>Until everyone is owned</h3>'],
   [
-    '<p class="note">同じ石を積むなら、旧仕様のほうが400連で64〜70文字多く持ち帰ります。浮く石の12連ぶんを恒常募集へ回しても星3は0.36人ぶんで、64文字は固有2の19%にあたります。この二つを同じ物差しで比べることはできません。それでも、降りられる代わりに毎回この差を払い続けることになります。</p>',
-    '<p class="note">Spend the same Pyroxene and the old system carries away 64 to 70 more Eleph over 400 pulls. Rolling the twelve saved pulls into a standard banner returns about 0.36 of a 3★, while 64 Eleph is 19% of the way to UE2. The two cannot be measured on one scale. Even so, the option to walk away is paid for with this gap, banner after banner.</p>',
+    '<p>呼出チャージには交換がないので、狙った生徒を順番に指名して引き当てるしかありません。素体がそろった時点で撤退する前提で置きます。</p>',
+    '<p>Recruitment Charge has no exchange, so each student has to be selected and pulled in turn. The run is assumed to stop once every one of them is owned.</p>',
   ],
-  ['<h2>旧仕様なら上振れを選びにいける</h2>', '<h2>Recruitment Points lets you choose your upside</h2>'],
   [
-    '<p>違いがはっきりするのは3名以上を狙うときです。呼出ポイントは<b>水着イロハを指名し続けたまま、200連ごとの交換枠を使い分けられます</b>。この自由度が新仕様には存在しません。</p>',
-    '<p>The gap only opens up once you are after three or more. Recruitment Points lets you <b>stay on Swimsuit Iroha the whole way while directing each 200-point exchange where it helps most</b>. Recruitment Charge offers no such choice.</p>',
+    '<p class="note">すり抜けで相方が来ると、その生徒を指名せずに済むぶん早く終わります。そのかわり、指名して引いていれば付いたはずの初回PUボーナスが手に入らないため、文字は目減りします。相方にも固有2が要るなら撤退せず指名を続けることになり、次に引き当てた1回が重複100文字と未消費の初回ボーナス100文字で<b>200文字</b>になって、取り逃した分はそこで戻ります。</p>',
+    '<p class="note">An off-target pull that delivers a partner saves you from ever selecting her, ending the run sooner — but the first-time bonus that selecting would have paid never arrives, so the Eleph haul shrinks. If that partner also needs UE2 you keep selecting instead of stopping, and the next hit pays 100 for the duplicate plus the unspent 100 bonus, <b>200 Eleph</b> in one go, returning what looked lost.</p>',
+  ],
+  ['<h3>石はどちらが安いか</h3>', '<h3>Which costs less</h3>'],
+  ['<p class="note">素体をそろえるだけなら呼出チャージ', '<p class="note">If the goal is simply owning everyone, Recruitment Charge'],
+  ['<p class="note">素体をそろえるだけなら呼出ポイント', '<p class="note">If the goal is simply owning everyone, Recruitment Points'],
+  ['が1,441石ぶん安く上がります。', ' comes in 1,441 Pyroxene cheaper. '],
+  ['が455石ぶん安く上がります。', ' comes in 455 Pyroxene cheaper. '],
+  ['が268石ぶん安く上がります。', ' comes in 268 Pyroxene cheaper. '],
+  [
+    'ただし同じ石を積んだときに持ち帰る文字は、一貫して呼出ポイントのほうが多い。降りられる代わりに、その差を毎回払い続ける形です。</p>',
+    'Spend the same Pyroxene, though, and Recruitment Points consistently carries away more Eleph. The option to walk away is paid for with that gap, banner after banner.</p>',
+  ],
+  ['<h3>旧仕様なら交換枠を選びにいける</h3>', '<h3>Recruitment Points lets you aim the exchange</h3>'],
+  [
+    '<p>2名を狙うだけなら、どちらの仕様でも大差はありません。呼出ポイントはほぼ確実に200連ぶんの石を持っていかれますが、そのかわり一定の確率で交換枠がまるごと余ります。余った枠は100文字、既所持の制服ネルへ回せば200文字。差はその程度です。</p>',
+    '<p>Chasing just two students, the systems land in much the same place. Recruitment Points all but guarantees a full 200 pulls of spending, but a fair share of the time the exchange goes entirely spare. A spare exchange is 100 Eleph, or 200 sent into a Uniform Nel you already own. That is the whole of it.</p>',
+  ],
+  [
+    '<p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、差が出ない部分です。差が出るのは2枠目、すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p>',
+    '<p>That said, <b>letting a festival student slip away is never an option</b>. If Ibuki is not owned, the first exchange always secures her — and the new system reaches that point just as reliably, so nothing separates them there. The difference is the second exchange: sent into a student you already own whose bonus is unspent — <b>say Uniform Nel sitting at UE3</b> — it pays 100 for the duplicate plus the 100 bonus, <b>200 Eleph</b>.</p>',
+  ],
+  ['<h4>400連・交換2枠の使い道</h4>', '<h4>Spending the two exchanges over 400 pulls</h4>'],
+  [
+    '<p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b></p>',
+    '<p class="note">With Ibuki secured, the second exchange into Iroha lifts her UE2 rate to 77.0%; into an already-owned Nel it adds 100 Eleph for 605 total. Push the featured attacker, or push someone already on your roster — <b>having that choice at all is worth something the new system does not offer.</b></p>',
+  ],
+  ['<h4>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h4>', '<h4>Copies over 400 pulls (secure Ibuki, then Iroha)</h4>'],
+  ['<h3>実際にはどこで降りるのか</h3>', '<h3>Where the run actually ends</h3>'],
+  [
+    '<p>ここまでは連数を積み切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。そろい切った状態から、文字目当てに追加の200連を回すことはありません。</p>',
+    '<p>Everything above assumed the pulls were spent in full. In practice you <b>stop at the end of the block where the last student arrives</b>. Nobody spends another 200 pulls on a finished roster just to farm Eleph.</p>',
+  ],
+  [
+    '<p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。期待文字はどちらも300前後で、イブキが素体確保で十分な性能ならこれで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p>',
+    '<p class="note">With two students the approach does not change when you get to stop: <b>about 80% are released at 200 pulls, the remaining 20% face 400</b>. Staying on Iroha leaves 8 more Eleph from duplicates but assembles the roster just as fast. Either way the haul lands near 300 Eleph, which is enough if simply owning Ibuki does the job. If Ibuki needs UE2 as well, that <b>falls well short of 340</b> and this banner alone will not finish it.</p>',
   ],
   ['<h2>1連の重さは違うが、決め手にはならない</h2>', '<h2>A single pull is worth more during the festival</h2>'],
   [
@@ -868,19 +894,10 @@ const ENGLISH_REPLACEMENTS = [
   // 長い本文を先に置換する。あとに続く短いラベルが本文の一部を書き換えてしまうため。
   ['イブキを確保 → 残りはイロハ', 'Secure Ibuki, then Iroha'],
   ['イブキを確保 → 残りは既所持のネル', 'Secure Ibuki, then owned Nel'],
-  ['<h3>400連で何体お迎えできるか（イブキを確保して残りはイロハ）</h3>', '<h3>How many arrive over 400 pulls (secure Ibuki, then Iroha)</h3>'],
   ['<th>お迎え数</th>', '<th>Copies</th>'],
   [
     '<p class="note">イロハを3体そろえれば353文字で固有2に届きます。この進め方なら<b>イブキは必ず1体以上</b>手に入り、そのうえでイロハが3体以上に達する確率が77.0%です。</p>',
     '<p class="note">Three copies of Iroha come to 353 Eleph, which clears UE2. On this plan <b>Ibuki always arrives at least once</b>, and Iroha still reaches three or more copies 77.0% of the time.</p>',
-  ],
-  [
-    '<p>先に断っておくと、<b>2名を狙うだけなら、どちらの仕様でも大差はありません</b>。呼出ポイントはほぼ確実に200連ぶんの石を持っていかれますが、そのかわり<b>',
-    '<p>To be clear up front, <b>if you are only after two students, the two systems land in much the same place</b>. Recruitment Points all but guarantees you spend a full 200 pulls, but in return <b>',
-  ],
-  [
-    '</b>の確率で交換枠がまるごと余ります。余った枠は100文字、既所持の制服ネルへ回せば200文字。差はその程度です。</p>',
-    '</b> of the time the exchange is left entirely spare. A spare exchange is 100 Eleph, or 200 if you send it into a Uniform Nel you already own. That is the whole of the difference.</p>',
   ],
   [
     '<p class="note">この差は指名にも交換にも関係なく、引いた回数だけで付いてきます。ただし<b>拾った欠片がそのまま戦力になるわけではありません</b>。多くの生徒は育成対象にならず、育てる生徒は先に欠片交換で固有2まで上げ終えています。実際に凸へ回せるのは多く見ても1割程度で、しかも安い交換段は使い切っているので5欠片で1文字です。</p>',
@@ -968,24 +985,9 @@ const ENGLISH_REPLACEMENTS = [
     '<li><b>損</b>：文字の受け皿がもう無い先生。石で欠片と使わない星3を買うだけになります。分かれ目は、指名生徒1体ぶんの文字にまだ使い道があるかどうかです。</li>',
     '<li><b>Not worth it</b> if there is nowhere left to spend Eleph. You are buying shards and 3★ students you will never build. The line is simply whether one student\'s worth of Eleph still has a use.</li>',
   ],
-  ['<h2>実際にはどこで降りるのか</h2>', '<h2>Where the run actually ends</h2>'],
-  [
-    '<p>ここまでは400連を引き切る前提でした。実戦では<b>素体がそろったブロックの終わりで降ります</b>。文字が欲しいからといって、そろい切った状態から追加の200連を回すことはありません。交換枠は未所持がいれば必ずそこへ使います。</p>',
-    '<p>Everything so far assumed a full 400 pulls. In practice you <b>stop at the end of the block where the last student arrives</b>. Nobody spends another 200 pulls on a finished roster just to farm Eleph. Each exchange still goes to a student you do not own, whenever one remains.</p>',
-  ],
-  ['<h3>2PU（水着イロハ・水着イブキ）</h3>', '<h3>Two students (Swimsuit Iroha, Swimsuit Ibuki)</h3>'],
-  ['<h3>3PU（水着イロハ・水着イブキ・制服ネル）</h3>', '<h3>Three students (Swimsuit Iroha, Swimsuit Ibuki, Uniform Nel)</h3>'],
   ['<th>進め方</th>', '<th>Approach</th>'],
   ['<th>期待消費</th>', '<th>Expected cost</th>'],
   ['<th>期待文字</th>', '<th>Expected Eleph</th>'],
-  [
-    '<p class="note">2PUでは進め方を変えても降りる時点は動きません。<b>約8割が200連で解放され、残る2割が400連の残業に回ります</b>。イロハに集中したほうが重複ぶんで8文字だけ多く残りますが、素体をそろえる速さは同じです。</p>',
-    '<p class="note">With two students the approach does not change when you get to stop: <b>about 80% are released at 200 pulls and the remaining 20% face the 400-pull overtime</b>. Staying on Iroha leaves 8 more Eleph from duplicates, but assembles the roster at exactly the same speed.</p>',
-  ],
-  [
-    '<p class="note">どちらの場合も期待文字は300前後にとどまります。イブキが素体確保で十分な性能なら、これで目的は果たせています。イブキにも固有2が要るなら<b>340文字には遠く届かず</b>、このガチャだけでは完結しません。</p>',
-    '<p class="note">Either way the haul lands around 300 Eleph. If simply owning Ibuki is enough, the job is done. If Ibuki also needs UE2, that <b>falls well short of 340 Eleph</b> and this banner alone will not finish the job.</p>',
-  ],
   [
     '<p class="note">3PUになると進め方で結果が割れます。引けたら次の生徒へ移れば<b>200連で降りられる確率が50.6%</b>まで上がり、期待消費は36,640石。イロハに集中すると200連での解放は25.7%に半減し、期待消費は44,477石へ膨らみます。そのかわり集中したほうが<b>76文字多く</b>持ち帰ります。</p>',
     '<p class="note">At three students the approaches split apart. Moving on after each hit raises the chance of stopping at 200 pulls to <b>50.6%</b> and costs 36,640 Pyroxene on average. Staying on Iroha halves that release rate to 25.7% and pushes the cost to 44,477 Pyroxene — but carries away <b>76 more Eleph</b>.</p>',
@@ -996,21 +998,7 @@ const ENGLISH_REPLACEMENTS = [
   ],
   // 表のラベルは本文より後に置く。先に適用すると本文の一部を書き換えてしまう。
   ['体以上', '+'],
-  [
-    '<p>ただし<b>フェス限を取り逃す選択肢はありません</b>。イブキが未所持なら1枠目は必ずイブキの確保に使います。ここは新仕様でも確実に取れるところで、両者の差が出ない部分です。</p>',
-    '<p>That said, <b>letting a festival student slip away is never an option</b>. If Ibuki is not owned, the first exchange always goes to securing her. The new system reaches that same point reliably too, so nothing separates them here.</p>',
-  ],
-  [
-    '<p>差が出るのは2枠目です。交換枠の値打ちは相手によって変わり、未所持の生徒を引き取れば素体と初回ボーナス100文字。すでに素体を持っていて初回ボーナスが未消費の生徒——たとえば<b>制服ネルを固有3で止めている先生</b>なら、重複100文字と初回ボーナス100文字で<b>200文字</b>になります。</p>',
-    '<p>The difference shows up in the second exchange. What it is worth depends on who you spend it on: a student you do not own yields the unit plus a 100 Eleph first-time bonus, while one you already own whose bonus is still unspent — say <b>a player sitting on Uniform Nel at UE3</b> — pays 100 Eleph for the duplicate plus the 100 Eleph bonus, for <b>200 Eleph</b>.</p>',
-  ],
-  ['<h3>400連・交換2枠の使い道</h3>', '<h3>Spending the two exchanges over 400 pulls</h3>'],
   ['<th>イロハ固有2</th>', '<th>Iroha at UE2</th>'],
-  [
-    '<p class="note">イブキを確保したうえで、2枠目をイロハに回せば固有2到達が77.0%になり、既所持のネルに回せば文字が100文字増えて605文字になります。イロハの凸を進めるか、手持ちの生徒の凸を進めるか——<b>どちらを選ぶかを先生が決められること自体が、新仕様には無い価値です。</b>呼出チャージには、この2枠目にあたるものが存在しません。</p>',
-    '<p class="note">With Ibuki secured, sending the second exchange into Iroha lifts her UE2 rate to 77.0%, while sending it into an already-owned Nel adds 100 Eleph for 605 total. Push the featured attacker further, or push a student already on your roster — <b>having that choice at all is worth something the new system does not offer.</b> Recruitment Charge has no second exchange to spend.</p>',
-  ],
-  ['<h3>4PU（対象4名すべて）</h3>', '<h3>Four students (every featured student)</h3>'],
   [
     '<p class="note">4名を全部そろえるとなると、引けた順に乗り換えても<b>200連で降りられるのは26.6%</b>にとどまり、6割が400連まで、1割強は600連まで続きます。イロハに集中した場合は200連での解放が6.6%まで落ち、期待消費は58,633石。乗り換えとの差は13,886石にひらきます。</p>',
     '<p class="note">Going after all four, even switching as each one lands leaves you <b>only a 26.6% chance of stopping at 200 pulls</b>; six in ten run to 400 and better than one in ten to 600. Staying on Iroha drops that release rate to 6.6% and costs 58,633 Pyroxene on average — 13,886 more than switching.</p>',
