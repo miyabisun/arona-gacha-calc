@@ -42,5 +42,10 @@ test('英語版Q&Aとページ対応の日英切替を生成する', () => {
   assert.match(english, /rel="alternate" hreflang="x-default"/);
   assert.match(english, /How many pulls should I expect to need per banner\?/);
   assert.match(english, /Pyroxene/);
+  assert.match(english, /class="expectation-table"/);
+  assert.match(english, /<th>PUs<\/th><th>Charge<\/th><th>Points<\/th>/);
+  assert.match(english, /class="comparison-table"/);
+  assert.match(english, /1 PU in 100 pulls/);
+  assert.match(english, /\.comparison-table\{table-layout:fixed;white-space:normal\}/);
   assert.doesNotMatch(english, /[ぁ-んァ-ヶ一-龠]/);
 });
