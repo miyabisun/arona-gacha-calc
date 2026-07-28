@@ -24,7 +24,7 @@ const PU_TAB_LEAD = {
 function pointBlock(result) {
   const b = result.twoPuBranch;
   const p = (v) => `${(v * 100).toFixed(1)}%`;
-  return `<h3>Recruitment Points</h3><p>Select Swimsuit Iroha for 200 pulls, mechanically. The branch depends only on where things stand at pull 200.</p><table><colgroup><col style="width:40%"><col style="width:16%"><col style="width:44%"></colgroup><thead><tr><th>At pull 200</th><th>Chance</th><th>Action</th></tr></thead><tbody><tr><th>Iroha pulled + Ibuki spooked</th><td data-label="Chance">${p(b.bothArrived)}</td><td data-label="Action">Done. Exchange goes spare: 100 Eleph as a duplicate of either</td></tr><tr><th>Iroha pulled only</th><td data-label="Chance" class="best">${p(b.exchangeForPartner)}</td><td data-label="Action">Exchange secures Ibuki, done</td></tr><tr><th>Ibuki spooked only</th><td data-label="Chance">${p(b.exchangeForMain)}</td><td data-label="Action">Exchange secures Iroha, done</td></tr><tr><th>Neither</th><td data-label="Chance">${p(b.overtime)}</td><td data-label="Action">Overtime from hell. Keep pulling Iroha; at 400 exchange whatever is missing (worst case, one Iroha and one Ibuki)</td></tr></tbody></table><p class="note">An Iroha landing mid-overtime changes nothing: pull to 400 and exchange what is missing. Spare exchanges go to Iroha or Ibuki duplicates at 100 Eleph — no other student enters the story.</p>
+  return `<h3>Recruitment Points</h3><p>Select Swimsuit Iroha for 200 pulls, mechanically. The branch depends only on where things stand at pull 200.</p><table><colgroup><col style="width:40%"><col style="width:16%"><col style="width:44%"></colgroup><thead><tr><th>At pull 200</th><th>Chance</th><th>Action</th></tr></thead><tbody><tr><th>Iroha pulled + Ibuki spooked</th><td data-label="Chance">${p(b.bothArrived)}</td><td data-label="Action">Done. Exchange takes Ibuki for 200 Eleph (100 duplicate + 100 first-time bonus)</td></tr><tr><th>Iroha pulled only</th><td data-label="Chance" class="best">${p(b.exchangeForPartner)}</td><td data-label="Action">Exchange secures Ibuki, done</td></tr><tr><th>Ibuki spooked only</th><td data-label="Chance">${p(b.exchangeForMain)}</td><td data-label="Action">Exchange secures Iroha, done</td></tr><tr><th>Neither</th><td data-label="Chance">${p(b.overtime)}</td><td data-label="Action">Overtime from hell. Keep pulling Iroha; at 400 exchange whatever is missing (worst case, one Iroha and one Ibuki)</td></tr></tbody></table><p class="note">An Iroha landing mid-overtime changes nothing: pull to 400 and exchange what is missing. Spare exchanges take Ibuki for 200 Eleph while her first-time bonus is unclaimed, then fall back to 100-Eleph duplicates — no other student enters the story.</p>
 <h3>Never switch the pickup to Ibuki</h3><p>The plan that switches the pickup to Ibuki once Iroha lands: expected Eleph drops from ${Math.round(result.blockRun[2].focus.letters)} to ${Math.round(result.blockRun[2].sequential.letters)} at identical cost. <b>Out of the question.</b></p><p class="note">Switching to a UE3 Uniform Nel after Iroha would add an expected +56 Eleph, but the old system is never coming back — a niche pattern, out of scope.</p>`;
 }
 
@@ -73,13 +73,17 @@ const stone = (pulls) => Math.round(pulls * PYROXENE_PER_PULL).toLocaleString('j
 /** 新旧をひとつの表に並べ、呼び出しポイントは降りたブロックごとに分けて示す。 */
 /** 結論の判定行。石の節約と文字の減少を色分けし、浮いた連数の掘り換算を添える。 */
 function verdictLines(result, target, withSpook) {
-  const rate = result.banking.chaseRateFes;
+  // 文字目的の周回は平常時の10連50欠片で換算する。
+  const rate = result.banking.chaseRate;
   const line = (plan, label) => {
     const saved = plan.pulls - withSpook.expectedPulls;
     // 旧仕様側は追加で引いたぶんフェス限の欠片(16文字/10連)も拾っている。
     const lost = (plan.letters - withSpook.letters) + saved * FES_BYPRODUCT_PER_PULL;
     const recovered = saved * rate;
-    return `<p class="verdict">${label}Recruitment Charge saves <b class="gain">${stone(saved)} Pyroxene</b> at the cost of <b class="loss">${Math.round(lost)} Eleph</b>.<br>Eleph chase: <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)} pulls * 80 shards / 5 Eleph + 200 Eleph / 90 expected pulls">${saved.toFixed(1)} pulls</u> → ${Math.round(recovered)} Eleph<br><b class="loss">Recruitment Points wins</b></p>`;
+    const verdict = recovered >= lost
+      ? '<b class="gain">Recruitment Charge wins</b>'
+      : '<b class="loss">Recruitment Points wins</b>';
+    return `<p class="verdict">${label}Recruitment Charge saves <b class="gain">${stone(saved)} Pyroxene</b> at the cost of <b class="loss">${Math.round(lost)} Eleph</b>.<br>Eleph chase: <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)} pulls * 50 shards / 5 Eleph + 200 Eleph / 90 expected pulls">${saved.toFixed(1)} pulls</u> → ${Math.round(recovered)} Eleph<br>${verdict}</p>`;
   };
   // イロハを引き続ける打ち方は悪手(効率の悪い文字周回)なので、結論の比較相手にしない。
   if (target === 2) return line(result.blockRun[2].focus, '');

@@ -23,7 +23,7 @@ const PU_TAB_LEAD = {
 function pointBlock(result) {
   const b = result.twoPuBranch;
   const p = (v) => `${(v * 100).toFixed(1)}%`;
-  return `<h3>呼び出しポイント</h3><p>機械的に水着イロハをPU対象に設定して200連。200連時点の結果だけで分岐。</p><table><colgroup><col style="width:40%"><col style="width:16%"><col style="width:44%"></colgroup><thead><tr><th>200連時点</th><th>確率</th><th>動き</th></tr></thead><tbody><tr><th>イロハ自引き＋イブキすり抜け</th><td data-label="確率">${p(b.bothArrived)}</td><td data-label="動き">完了。交換枠は余り、どちらかの重複100文字</td></tr><tr><th>イロハ自引きのみ</th><td data-label="確率" class="best">${p(b.exchangeForPartner)}</td><td data-label="動き">交換でイブキ確保、完了</td></tr><tr><th>イブキすり抜けのみ</th><td data-label="確率">${p(b.exchangeForMain)}</td><td data-label="動き">交換でイロハ確保、完了</td></tr><tr><th>どちらも無し</th><td data-label="確率">${p(b.overtime)}</td><td data-label="動き">地獄の残業へ。イロハを引き続け、400連時点で不足分を交換（最悪イロハ・イブキを各1体交換）</td></tr></tbody></table><p class="note">残業中にイロハが出ても引き止めなし、400連まで回して不足分を交換。余った交換枠はイロハかイブキの重複100文字に充て、他生徒は登場させない。</p>
+  return `<h3>呼び出しポイント</h3><p>機械的に水着イロハをPU対象に設定して200連。200連時点の結果だけで分岐。</p><table><colgroup><col style="width:40%"><col style="width:16%"><col style="width:44%"></colgroup><thead><tr><th>200連時点</th><th>確率</th><th>動き</th></tr></thead><tbody><tr><th>イロハ自引き＋イブキすり抜け</th><td data-label="確率">${p(b.bothArrived)}</td><td data-label="動き">完了。交換はイブキを選び200文字（重複100＋初回ボーナス100）</td></tr><tr><th>イロハ自引きのみ</th><td data-label="確率" class="best">${p(b.exchangeForPartner)}</td><td data-label="動き">交換でイブキ確保、完了</td></tr><tr><th>イブキすり抜けのみ</th><td data-label="確率">${p(b.exchangeForMain)}</td><td data-label="動き">交換でイロハ確保、完了</td></tr><tr><th>どちらも無し</th><td data-label="確率">${p(b.overtime)}</td><td data-label="動き">地獄の残業へ。イロハを引き続け、400連時点で不足分を交換（最悪イロハ・イブキを各1体交換）</td></tr></tbody></table><p class="note">残業中にイロハが出ても引き止めなし、400連まで回して不足分を交換。余った交換枠は初回ボーナス未消費のイブキなら200文字、消費済みなら重複100文字に充て、他生徒は登場させない。</p>
 <h3>水着イブキへのPU切替はナシ</h3><p>イロハを引けた後にPU対象をイブキへ切り替えるプラン：期待文字が${Math.round(result.blockRun[2].focus.letters)}文字→${Math.round(result.blockRun[2].sequential.letters)}文字に減るだけで消費は同一。<b>ありえない。</b></p><p class="note">イロハ確保後に固有3の制服ネルへ切り替えれば期待+56文字だが、旧仕様は今後戻らないため、ニッチパターンとして対象外。</p>`;
 }
 
@@ -72,13 +72,17 @@ const stone = (pulls) => Math.round(pulls * PYROXENE_PER_PULL).toLocaleString('j
 /** 新旧をひとつの表に並べ、呼び出しポイントは降りたブロックごとに分けて示す。 */
 /** 結論の判定行。石の節約と文字の減少を色分けし、浮いた連数の掘り換算を添える。 */
 function verdictLines(result, target, withSpook) {
-  const rate = result.banking.chaseRateFes;
+  // 文字目的の周回は平常時の10連50欠片で換算する。
+  const rate = result.banking.chaseRate;
   const line = (plan, label) => {
     const saved = plan.pulls - withSpook.expectedPulls;
     // 旧仕様側は追加で引いたぶんフェス限の欠片(16文字/10連)も拾っている。
     const lost = (plan.letters - withSpook.letters) + saved * FES_BYPRODUCT_PER_PULL;
     const recovered = saved * rate;
-    return `<p class="verdict">${label}呼び出しチャージは<b class="gain">${stone(saved)}石</b>安くなる代わりに<b class="loss">${Math.round(lost)}文字分減少</b>。<br>文字目的の周回 <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)}連 * 80欠片 / 5文字 + 200文字 / 期待値90連">${saved.toFixed(1)}連</u> → ${Math.round(recovered)}文字<br><b class="loss">呼び出しポイント優位</b></p>`;
+    const verdict = recovered >= lost
+      ? '<b class="gain">呼び出しチャージ優位</b>'
+      : '<b class="loss">呼び出しポイント優位</b>';
+    return `<p class="verdict">${label}呼び出しチャージは<b class="gain">${stone(saved)}石</b>安くなる代わりに<b class="loss">${Math.round(lost)}文字分減少</b>。<br>文字目的の周回 <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)}連 * 50欠片 / 5文字 + 200文字 / 期待値90連">${saved.toFixed(1)}連</u> → ${Math.round(recovered)}文字<br>${verdict}</p>`;
   };
   // イロハを引き続ける打ち方は悪手(効率の悪い文字周回)なので、結論の比較相手にしない。
   if (target === 2) return line(result.blockRun[2].focus, '');
