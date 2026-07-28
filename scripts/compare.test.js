@@ -5,6 +5,8 @@ const {
   rateForCharge,
   singleCycleDistribution,
   binomialTail,
+  totalWithTickets,
+  practicalChargeCurves,
   renderHtml,
   standaloneSvg,
 } = require('./compare.js');
@@ -56,15 +58,15 @@ test('1〜10PUタブと2PU初期表示を生成する', () => {
   assert.doesNotMatch(html, /75% SAFE|安全圏|1\.0周年|5\.5周年/);
 });
 
-test('英語版の確率表と日英切替を生成する', () => {
+test('英語版の理論値比較と日英切替を生成する', () => {
   const result = calculateComparison();
-  const japanese = renderHtml(result);
-  const english = renderHtml(result, 'en');
-  assert.match(japanese, /href="en\/" lang="en" hreflang="en">EN/);
+  const japanese = renderHtml(result, 'ja', 'theory');
+  const english = renderHtml(result, 'en', 'theory');
+  assert.match(japanese, /href="en\/theory.html" lang="en" hreflang="en">EN/);
   assert.match(japanese, /2PUが揃う確率（1〜400連）/);
   assert.match(japanese, /1PUを獲得できる確率（1〜200連）/);
   assert.match(english, /<html lang="en">/);
-  assert.match(english, /href="\.\.\/" lang="ja" hreflang="ja">JP/);
+  assert.match(english, /href="\.\.\/theory.html" lang="ja" hreflang="ja">JP/);
   assert.match(english, /rel="alternate" hreflang="x-default"/);
   assert.match(english, /languageLink\.hash=location\.hash/);
   assert.match(english, /Blue Archive Recruitment Probability Chart/);
@@ -87,4 +89,34 @@ test('1〜4PU向けの独立SVGを生成できる', () => {
     assert.match(svg, /\.grid \.y-label\{text-anchor:end\}/);
     assert.equal((svg.match(/class="curve /g) ?? []).length, 2);
   }
+});
+
+test('実践値: チケットの崖と累計換算', () => {
+  assert.equal(totalWithTickets(69), 69);
+  assert.equal(totalWithTickets(70), 80);
+  assert.equal(totalWithTickets(120), 140);
+  assert.equal(totalWithTickets(140), 180);
+  assert.equal(totalWithTickets(160), 200);
+  assert.equal(totalWithTickets(300), 380);
+  const result = calculateComparison();
+  const practical = practicalChargeCurves(result);
+  assert.equal(practical[1][69], result.curves.anniversary5_5[1][69]);
+  assert.equal(practical[1][70], result.curves.anniversary5_5[1][80]);
+  assert.ok(Math.abs(practical[1][160] - 1) < 1e-12);
+  for (let paid = 1; paid <= 400; paid += 1) {
+    assert.ok(practical[2][paid] >= practical[2][paid - 1] - 1e-15);
+  }
+});
+
+test('実践値ページ(index)は持出連軸で生成される', () => {
+  const result = calculateComparison();
+  const japanese = renderHtml(result);
+  assert.match(japanese, /BlueArchive ガチャ実践値比較/);
+  assert.match(japanese, /持出1〜400連/);
+  assert.match(japanese, /'持出'\+current/);
+  assert.match(japanese, /実践値の前提/);
+  const english = renderHtml(result, 'en');
+  assert.match(english, /paid pulls/);
+  assert.match(english, /Practical Recruitment Chart/);
+  assert.doesNotMatch(english, /[ぁ-んァ-ヶ一-龠]/);
 });

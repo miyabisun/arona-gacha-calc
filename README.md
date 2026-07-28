@@ -6,10 +6,10 @@ An exact, bilingual probability calculator comparing Recruitment Points and Recr
 
 ## 公開ページ
 
-| 言語 | 確率表 | 5.5周年フェス限 | 計算方法とQ&A |
-| --- | --- | --- | --- |
-| 日本語 | [確率表](https://miyabisun.github.io/arona-gacha-calc/) | [5.5th](https://miyabisun.github.io/arona-gacha-calc/festival.html) | [計算方法とQ&A](https://miyabisun.github.io/arona-gacha-calc/faq.html) |
-| English | [Probability chart (EN)](https://miyabisun.github.io/arona-gacha-calc/en/) | [5.5th (EN)](https://miyabisun.github.io/arona-gacha-calc/en/festival.html) | [Q&A (EN)](https://miyabisun.github.io/arona-gacha-calc/en/faq.html) |
+| 言語 | 実践値比較 | 理論値比較 | 通常2PU | 計算方法とQ&A |
+| --- | --- | --- | --- | --- |
+| 日本語 | [実践値比較](https://miyabisun.github.io/arona-gacha-calc/) | [理論値比較](https://miyabisun.github.io/arona-gacha-calc/theory.html) | [通常2PU](https://miyabisun.github.io/arona-gacha-calc/pickup.html) | [Q&A](https://miyabisun.github.io/arona-gacha-calc/faq.html) |
+| English | [Practical (EN)](https://miyabisun.github.io/arona-gacha-calc/en/) | [Theoretical (EN)](https://miyabisun.github.io/arona-gacha-calc/en/theory.html) | [Normal 2PU (EN)](https://miyabisun.github.io/arona-gacha-calc/en/pickup.html) | [Q&A (EN)](https://miyabisun.github.io/arona-gacha-calc/en/faq.html) |
 
 ## 計算モデル
 
@@ -22,15 +22,14 @@ An exact, bilingual probability calculator comparing Recruitment Points and Recr
 
 計算結果には、1〜10PUをそれぞれ最大200連/PUで揃える累積確率と、1〜4PUの期待募集回数・期待青輝石消費量が含まれます。
 
-### 5.5周年フェス限モデル
+### 実践値モデル（トップページ）
 
-フェス限定募集は星3排出率が6%へ倍化し、指名していないフェス限生徒も出現します。このため上記の基本モデルとは別に、すり抜けを含めた専用の計算を行います。
+2026-07-29の生徒募集システムリニューアルで追加された「募集回数特典」を織り込んだ比較です。
 
-- 星3の6%は、指名PU 0.7%、指名中の1名を除いた新旧フェス限9名で等分する0.9%（1名あたり0.1%）、恒常星3の4.4%に分かれる。4.4%は内訳として記録するだけで計算には使わない。
-- 状態は「初回PUボーナス取得数 × すり抜けのみで確保した数 × 呼出チャージ」。生徒を同質として扱い、人数だけを持つ。
-- 初回PUボーナスは指名PUの自引きと呼出ポイント交換でのみ得られる。すり抜けでの確保は素体だけを増やす。
-- チャージ99の確定50%を外した残り50%でのみ通常抽選が回り、チャージ199は確定のためすり抜けが起きない。
-- すり抜けはボーナス側の分布に影響しないため、ボーナスの曲線は基本モデルの結果と厳密に一致する。この一致をテストで検証している。
+- 累計70・130・150・170回（2周目は270・330・350・370回）で期間限定10連チケットを獲得し、即座に使う。
+- チケットで回した10連分も累計募集回数と呼び出しチャージに加算される。
+- 横軸は「持出連」＝石で支払った募集回数。チケット分は含まれないため、新仕様の曲線は特典到達のたびに崖状に伸びる（持出160連で200連ぶんに到達）。
+- 旧仕様（呼び出しポイント）に募集回数特典はないため理論値のままの曲線を並べる。
 
 ## リポジトリ構成
 
@@ -39,14 +38,15 @@ An exact, bilingual probability calculator comparing Recruitment Points and Recr
 ├── docs/
 │   ├── en/             # English HTML
 │   ├── img/            # 1〜4PUの共有SVG
-│   ├── index.html      # 日本語の確率表
-│   ├── festival.html   # 日本語の5.5周年フェス限比較
+│   ├── index.html      # 日本語の実践値比較
+│   ├── theory.html     # 日本語の理論値比較
+│   ├── pickup.html     # 日本語の通常2PU比較
 │   ├── faq.html        # 日本語のQ&A
 │   └── *.json          # 計算結果と監査データ
 ├── scripts/
-│   ├── compare.js      # 1〜10PUの厳密計算、グラフ、HTML/SVG生成
+│   ├── compare.js      # 1〜10PUの厳密計算、実践値/理論値ページ、SVG生成
 │   ├── calculate.js    # 2PUの詳細検算、期待値、Q&A生成
-│   ├── festival.js     # フェス限のすり抜けを含む厳密計算とページ生成
+│   ├── pickup.js       # 通常2PU(すり抜けなし)の比較ページ生成
 │   ├── localize.js     # 日英ナビゲーションと翻訳補助
 │   └── *.test.js       # 境界値、不変条件、独立計算との照合
 ├── DESIGN.md           # Kinari/Sumiデザイントークン

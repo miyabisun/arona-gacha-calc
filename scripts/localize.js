@@ -16,9 +16,9 @@ function pageHref(page) {
 function languageNav(locale, page) {
   const english = locale === 'en';
   const titles = english
-    ? { index: 'Probability chart', pickup: 'Normal 2PU', festival: '5.5th', faq: 'Q&amp;A' }
-    : { index: '確率表', pickup: '通常2PU', festival: '5.5th', faq: 'Q&amp;A' };
-  const pageLinks = ['index', 'pickup', 'festival', 'faq'].map((id) => {
+    ? { index: 'Practical', theory: 'Theoretical', pickup: 'Normal 2PU', faq: 'Q&amp;A' }
+    : { index: '実践値比較', theory: '理論値比較', pickup: '通常2PU', faq: 'Q&amp;A' };
+  const pageLinks = ['index', 'theory', 'pickup', 'faq'].map((id) => {
     const current = id === page ? ' aria-current="page"' : '';
     return `<a href="${pageHref(id)}"${current}>${titles[id]}</a>`;
   }).join('');
@@ -45,7 +45,7 @@ function localizeShell(html, locale, page) {
     .replace('</style>', `${LANGUAGE_SWITCH_CSS}</style>`)
     .replace('</head>', `${alternateLinks(page)}</head>`)
     .replace(navPattern, languageNav(locale, page));
-  if (page === 'index') {
+  if (page === 'index' || page === 'theory') {
     localized = localized.replace('</body>', '<script>const languageLink=document.querySelector(\'.language-switch a\'),syncLanguageLink=()=>{languageLink.hash=location.hash};for(const event of [\'pointerenter\',\'pointerdown\',\'focus\'])languageLink.addEventListener(event,syncLanguageLink);addEventListener(\'popstate\',syncLanguageLink);syncLanguageLink()</script></body>');
   }
   return localized;

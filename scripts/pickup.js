@@ -4,7 +4,7 @@
  * 通常2PUページのビルド入口。
  * - 計算:   scripts/pickup-calc.js
  * - 本文:   scripts/render/pickup-ja.js / pickup-en.js  (各言語を直接編集。自動同期はしない)
- * - 資材:   assets/festival.css を共用(コピーは festival.js が行う)
+ * - 資材:   assets/festival.css (このビルドで docs/css へコピーする)
  */
 
 const fs = require('node:fs');
@@ -17,6 +17,7 @@ const renderers = {
 };
 
 const OUTPUT_DIR = path.join(__dirname, '..', 'docs');
+const ASSETS = path.join(__dirname, '..', 'assets');
 
 function renderPickup(result, locale = 'ja') {
   const renderBody = renderers[locale];
@@ -27,6 +28,8 @@ function renderPickup(result, locale = 'ja') {
 function main() {
   const result = calc.calculatePickup();
   fs.mkdirSync(path.join(OUTPUT_DIR, 'en'), { recursive: true });
+  fs.mkdirSync(path.join(OUTPUT_DIR, 'css'), { recursive: true });
+  fs.copyFileSync(path.join(ASSETS, 'festival.css'), path.join(OUTPUT_DIR, 'css', 'festival.css'));
   fs.writeFileSync(path.join(OUTPUT_DIR, 'pickup.html'), renderPickup(result));
   fs.writeFileSync(path.join(OUTPUT_DIR, 'en', 'pickup.html'), renderPickup(result, 'en'));
   console.log(`通常2PU: 呼出チャージ${result.charge.expectedPulls.toFixed(1)}連/200文字  呼出ポイント${result.point.expectedPulls.toFixed(1)}連/${result.point.letters.toFixed(0)}文字  検算差: ${result.audit.convolutionGap.toExponential(2)}`);
