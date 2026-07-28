@@ -16,9 +16,9 @@ function pageHref(page) {
 function languageNav(locale, page) {
   const english = locale === 'en';
   const titles = english
-    ? { index: 'Probability chart', festival: '5.5th', faq: 'Q&amp;A' }
-    : { index: '確率表', festival: '5.5th', faq: 'Q&amp;A' };
-  const pageLinks = ['index', 'festival', 'faq'].map((id) => {
+    ? { index: 'Probability chart', pickup: 'Normal 2PU', festival: '5.5th', faq: 'Q&amp;A' }
+    : { index: '確率表', pickup: '通常2PU', festival: '5.5th', faq: 'Q&amp;A' };
+  const pageLinks = ['index', 'pickup', 'festival', 'faq'].map((id) => {
     const current = id === page ? ' aria-current="page"' : '';
     return `<a href="${pageHref(id)}"${current}>${titles[id]}</a>`;
   }).join('');
