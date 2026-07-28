@@ -83,7 +83,7 @@ function verdictLines(result, target, withSpook) {
     const verdict = recovered >= lost
       ? '<b class="gain">Recruitment Charge wins</b>'
       : '<b class="loss">Recruitment Points wins</b>';
-    return `<p class="verdict">${label}Recruitment Charge saves <b class="gain">${stone(saved)} Pyroxene</b> at the cost of <b class="loss">${Math.round(lost)} Eleph</b>.<br>Eleph chase: <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)} pulls * 50 shards / 5 Eleph + 200 Eleph / 90 expected pulls">${saved.toFixed(1)} pulls</u> → ${Math.round(recovered)} Eleph<br>${verdict}</p>`;
+    return `<p class="verdict">${label}Recruitment Charge saves <b class="gain">${stone(saved)} Pyroxene</b> at the cost of <b class="loss">${Math.round(lost)} Eleph</b>.<br>Eleph chase: <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)} pulls * (5 shards + 200 Eleph / 90 expected pulls)">${saved.toFixed(1)} pulls</u> → ${Math.round(recovered)} Eleph<br>${verdict}</p>`;
   };
   // イロハを引き続ける打ち方は悪手(効率の悪い文字周回)なので、結論の比較相手にしない。
   if (target === 2) return line(result.blockRun[2].focus, '');

@@ -82,7 +82,7 @@ function verdictLines(result, target, withSpook) {
     const verdict = recovered >= lost
       ? '<b class="gain">呼び出しチャージ優位</b>'
       : '<b class="loss">呼び出しポイント優位</b>';
-    return `<p class="verdict">${label}呼び出しチャージは<b class="gain">${stone(saved)}石</b>安くなる代わりに<b class="loss">${Math.round(lost)}文字分減少</b>。<br>文字目的の周回 <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)}連 * 50欠片 / 5文字 + 200文字 / 期待値90連">${saved.toFixed(1)}連</u> → ${Math.round(recovered)}文字<br>${verdict}</p>`;
+    return `<p class="verdict">${label}呼び出しチャージは<b class="gain">${stone(saved)}石</b>安くなる代わりに<b class="loss">${Math.round(lost)}文字分減少</b>。<br>文字目的の周回 <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)}連 * (5欠片 + 200文字 / 期待値90連)">${saved.toFixed(1)}連</u> → ${Math.round(recovered)}文字<br>${verdict}</p>`;
   };
   // イロハを引き続ける打ち方は悪手(効率の悪い文字周回)なので、結論の比較相手にしない。
   if (target === 2) return line(result.blockRun[2].focus, '');
