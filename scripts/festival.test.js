@@ -59,11 +59,11 @@ test('初回PUボーナスの曲線はすり抜けの影響を受けず既存の
     for (let pull = 0; pull <= 600; pull += 1) {
       assert.ok(
         Math.abs(festival.scenarios.charge[target].allBonus[pull] - comparison.curves.anniversary5_5[target][pull]) < 1e-12,
-        `呼出チャージ ${target}人 ${pull}連で不一致`,
+        `呼び出しチャージ ${target}人 ${pull}連で不一致`,
       );
       assert.ok(
         Math.abs(festival.scenarios.point[target].allBonus[pull] - comparison.curves.anniversary1_0[target][pull]) < 1e-12,
-        `呼出ポイント ${target}人 ${pull}連で不一致`,
+        `呼び出しポイント ${target}人 ${pull}連で不一致`,
       );
     }
   }
@@ -78,7 +78,7 @@ test('すり抜けを止めると素体とボーナスの曲線が一致する',
   assert.ok(Math.abs(curves.allBonus[200] - 1) < 1e-12);
 });
 
-test('呼出チャージを99まで貯めた状態では最初の募集で50%を得る', () => {
+test('呼び出しチャージを99まで貯めた状態では最初の募集で50%を得る', () => {
   const { curves } = runFestivalDp(2, { useCharge: true, useExchange: false, initialCharge: 99 });
   assert.ok(Math.abs(curves.expectedBonus[1] - 0.5) < 1e-15);
 });
@@ -118,7 +118,7 @@ test('文字は経路ごとの報酬を積み上げた値になる', () => {
   assert.ok(exchanged.curves.allBonus[200] >= 1 - 1e-12);
 });
 
-test('文字と欠片は単調非減少で、呼出ポイントが上回る', () => {
+test('文字と欠片は単調非減少で、呼び出しポイントが上回る', () => {
   const result = calculateFestival();
   for (const target of TARGETS) {
     const charge = result.scenarios.charge[target];
@@ -127,7 +127,7 @@ test('文字と欠片は単調非減少で、呼出ポイントが上回る', ()
       assert.ok(charge.letters[pull] >= charge.letters[pull - 1] - 1e-12);
       assert.ok(point.shards[pull] >= point.shards[pull - 1] - 1e-12);
     }
-    // 自引きと交換が独立に走るぶん、200連以降は呼出ポイントの文字が多い。
+    // 自引きと交換が独立に走るぶん、200連以降は呼び出しポイントの文字が多い。
     for (const pull of [200, 400, 600]) {
       assert.ok(point.letters[pull] > charge.letters[pull], `${target}人 ${pull}連で逆転`);
     }
@@ -150,7 +150,7 @@ test('生成ページの数値が計算結果と一致する', () => {
     const retreat = result.retreat[target];
     assert.ok(html.includes(`${retreat.withSpook.expectedPulls.toFixed(1)}連`), `${target}PU すり抜けあり期待連数`);
     assert.ok(html.includes(`${retreat.withoutSpook.expectedPulls.toFixed(1)}連`), `${target}PU すり抜けなし期待連数`);
-    assert.ok(html.includes(`${Math.round(retreat.withoutSpook.letters)}文字`), `${target}PU 指名だけの文字`);
+    assert.ok(html.includes(`${Math.round(retreat.withoutSpook.letters)}文字`), `${target}PU PU対象だけの文字`);
     // ブロック運用: 進め方ごとの期待消費と文字。
     for (const plan of ['focus', 'sequential']) {
       const row = result.blockRun[target][plan];
@@ -158,7 +158,7 @@ test('生成ページの数値が計算結果と一致する', () => {
       assert.ok(html.includes(`${Math.round(row.pulls * 120).toLocaleString('ja-JP')}石`), `${target}PU ${plan} の石`);
     }
   }
-  // 2PUの呼出ポイント節は200連時点の4分岐を確率つきで出す。
+  // 2PUの呼び出しポイント節は200連時点の4分岐を確率つきで出す。
   const branch = result.twoPuBranch;
   for (const value of [branch.bothArrived, branch.exchangeForPartner, branch.exchangeForMain, branch.overtime]) {
     assert.ok(html.includes(`${(value * 100).toFixed(1)}%`), `分岐 ${(value * 100).toFixed(1)}%`);
@@ -168,16 +168,16 @@ test('生成ページの数値が計算結果と一致する', () => {
 test('有利な側にだけ印が付く', () => {
   const result = calculateFestival();
   const html = renderFestival(result);
-  // 呼出チャージ表: すり抜け込のほうが期待連数が短く、指名だけのほうが文字が多い。
+  // 呼び出しチャージ表: すり抜け込のほうが期待連数が短く、PU対象だけのほうが文字が多い。
   assert.match(html, /class="best">172\.6連/);
   assert.match(html, /class="best">200文字/);
-  // 呼出ポイントの分岐表では最頻の「イロハ自引きのみ」に印が付く。
+  // 呼び出しポイントの分岐表では最頻の「イロハ自引きのみ」に印が付く。
   assert.ok(result.twoPuBranch.exchangeForPartner > result.twoPuBranch.overtime);
   assert.match(html, new RegExp(`class="best">${(result.twoPuBranch.exchangeForPartner * 100).toFixed(1)}%`));
   assert.ok((html.match(/class="best"/g) ?? []).length >= 6);
 });
 
-test('呼出ポイントは200連ごとに必ず1名分のボーナスを増やす', () => {
+test('呼び出しポイントは200連ごとに必ず1名分のボーナスを増やす', () => {
   const { curves } = runFestivalDp(4, { useCharge: false, useExchange: true });
   assert.ok(curves.expectedBonus[200] >= 1 - 1e-12);
   assert.ok(curves.expectedBonus[400] >= 2 - 1e-12);

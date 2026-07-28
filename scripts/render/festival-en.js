@@ -9,7 +9,7 @@ const FESTIVAL_TAB_JS = fs.readFileSync(path.join(ASSETS, 'festival-tabs.js'), '
 const GITHUB_LINK = fs.readFileSync(path.join(ASSETS, 'github-link.html'), 'utf8').trim()
   .replace('GitHubリポジトリを開く', 'Open the GitHub repository');
 
-/** 呼出ポイントが交換できる区切り。ここが意思決定の分岐点になる。 */
+/** 呼び出しポイントが交換できる区切り。ここが意思決定の分岐点になる。 */
 const TABLE_PULLS = { 2: [200, 400], 3: [200, 400, 600], 4: [400, 600, 800] };
 
 
@@ -20,7 +20,7 @@ const PU_TAB_LEAD = {
   4: 'A brand-new player who owns neither of the rerun pair, going after all four featured students.',
 };
 
-/** 2PU専用。呼出ポイントの機械的な流れと、200連時点の分岐だけを示す。 */
+/** 2PU専用。呼び出しポイントの機械的な流れと、200連時点の分岐だけを示す。 */
 function pointBlock(result) {
   const b = result.twoPuBranch;
   const p = (v) => `${(v * 100).toFixed(1)}%`;
@@ -32,12 +32,12 @@ function pointBlock(result) {
 
 // 結論表の直下に置く説明。2PUは残業の重さを、3PU以上は表の読み方を示す。
 const CONCLUSION_NOTE = {
-  2: '<p class="note">Recruitment Points only lets you leave on a 200-pull boundary. <b>About 80% are released at 200 pulls; the remaining 20% begin pull 401 — overtime from hell.</b></p>',
+  2: '<p class="note"><b>About 80% are released at 200 pulls; the remaining 20% begin pull 401 — overtime from hell.</b></p>',
   3: '<p class="note">Staying on Iroha runs <b>mechanically to 400 pulls</b> for the Eleph balance. Moving on plays for the <b>200-pull early exit — a survival strategy</b> that trades expected Eleph for stones kept toward tomorrow\'s banner.</p>',
   4: '<p class="note">Staying on Iroha runs <b>mechanically to 600 pulls</b> for the Eleph balance. Moving on plays for the <b>early exit — a survival strategy</b> that trades expected Eleph for stones kept toward tomorrow\'s banner.</p>',
 };
 
-// 呼出チャージ節の表下に置く、狙い順の説明。
+// 呼び出しチャージ節の表下に置く、狙い順の説明。
 const RETREAT_NOTE = {
   2: 'There is no exchange: you select Swimsuit Iroha, then Swimsuit Ibuki, mechanically in order. An off-banner Ibuki along the way is welcome — but if she needs UE2, the Eleph haul shrinks and the shard budget gets tight. In that case an extra pickup chase, expecting about 90 pulls, comes into view.',
   3: 'There is no exchange: you select Swimsuit Iroha, Swimsuit Ibuki, then Uniform Nel, mechanically in order. Off-banner arrivals along the way are welcome — but for a student who needs UE2, the Eleph haul shrinks and the shard budget gets tight. In that case an extra pickup chase, expecting about 90 pulls, comes into view.',
@@ -56,7 +56,7 @@ function retreatSection(result) {
     const charge = result.scenarios.charge[target].expectedPullsToAllBase;
     const point = result.scenarios.point[target].expectedPullsToAllBase;
     return `<div data-pu-panel="${target}"${target === 2 ? '' : ' hidden'}><p>${PU_TAB_LEAD[target]}</p>
-<h3>Verdict</h3>${verdictLines(result, target, withSpook)}<table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>System and approach</th><th>Chance</th><th>Pulls</th><th>Pyroxene</th><th>Eleph earned</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}
+<h3>Verdict</h3>${verdictLines(result, target, withSpook)}<table><colgroup><col style="width:30%"><col style="width:16%"><col style="width:16%"><col style="width:19%"><col style="width:19%"></colgroup><thead><tr><th>System and approach</th><th>Chance</th><th>Pulls</th><th>Pyroxene</th><th>Eleph earned</th></tr></thead><tbody>${outcomeRows(result, target).join('')}</tbody></table>${CONCLUSION_NOTE[target]}${target === 2 ? '' : '<p class="note">As it turns out, continuing to pull for Swimsuit Iroha is simply a less efficient way to farm Eleph than a letter-chase PU banner.</p>'}
 <h3>Recruitment Charge</h3><table><colgroup><col style="width:40%"><col style="width:30%"><col style="width:30%"></colgroup><thead><tr><th>How they arrive</th><th>Expected pulls</th><th>Eleph earned</th></tr></thead><tbody><tr><th>${target}PU expected</th><td data-label="Expected pulls">${without.expectedPulls.toFixed(1)} pulls</td><td data-label="Eleph earned" class="best">${Math.round(without.letters)} Eleph</td></tr><tr><th>With spooks</th><td data-label="Expected pulls" class="best">${withSpook.expectedPulls.toFixed(1)} pulls</td><td data-label="Eleph earned">${Math.round(withSpook.letters)} Eleph</td></tr><tr><th>Gap</th><td data-label="Expected pulls">−${savedPulls.toFixed(1)} pulls</td><td data-label="Eleph earned">−${Math.round(lostLetters)} Eleph</td></tr><tr><th>Spook rate</th><td colspan="2" data-label="Spook rate">${(withSpook.finishedViaSpook * 100).toFixed(2)}%</td></tr></tbody></table><p class="note">${RETREAT_NOTE[target]}</p>
 
 ${target === 2 ? pointBlock(result) : ''}</div>`;
@@ -70,17 +70,8 @@ ${target === 2 ? pointBlock(result) : ''}</div>`;
 const stone = (pulls) => Math.round(pulls * PYROXENE_PER_PULL).toLocaleString('ja-JP');
 
 /** 200連ブロックごとの撤退確率。悲惨な残業がどれだけの確率で起きるかを見る。 */
-/** 新旧をひとつの表に並べ、呼出ポイントは降りたブロックごとに分けて示す。 */
-/** 結論の判定行。旧仕様側の進め方ごとに、浮いた石の掘り返しをぶつけて優位を一意に決める。 */
-/** ページ末尾の総括。連打信仰の検算結果と、唯一の例外を短く締める。 */
-function summarySection(result) {
-  const f3 = result.blockRun[3].focus;
-  const s3 = result.blockRun[3].sequential;
-  const marginal = (f3.letters - s3.letters) / (f3.pulls - s3.pulls);
-  return `<section class="panel"><h2>Bottom line</h2><p class="verdict"><b>Verdict: heaven or earth depends on whether you still have a 90-pull Eleph chase left.</b></p><p class="note"><b>If you do</b> (a bonus-unclaimed festival student to dig next festival): the freed Pyroxene converts back at ${result.banking.chaseRateFes.toFixed(2)} Eleph per pull, and <b>the new system leads in nearly every configuration</b> (+12 to +145 Eleph; only the 4PU early exit stays at −16).</p><p class="note"><b>If you do not</b> (nowhere left to spend Eleph): the stones cannot be turned back into Eleph, the earned-Eleph gap stands, and <b>the old system leads in every configuration</b>. The hundreds of Eleph the hammering piled up never come back.</p><p class="note">The long-trusted optimum of hammering one student earns a topped-up ${(marginal + 1.6).toFixed(2)} Eleph per extra pull against the ${result.banking.chaseRateFes.toFixed(2)} Eleph-per-pull benchmark — short of it in either world. The hammering itself was never worth the faith.</p></section>`;
-
-}
-
+/** 新旧をひとつの表に並べ、呼び出しポイントは降りたブロックごとに分けて示す。 */
+/** 結論の判定行。石の節約と文字の減少を色分けし、浮いた連数の掘り換算を添える。 */
 function verdictLines(result, target, withSpook) {
   const rate = result.banking.chaseRateFes;
   const line = (plan, label) => {
@@ -88,12 +79,11 @@ function verdictLines(result, target, withSpook) {
     // 旧仕様側は追加で引いたぶんフェス限の欠片(16文字/10連)も拾っている。
     const lost = (plan.letters - withSpook.letters) + saved * FES_BYPRODUCT_PER_PULL;
     const recovered = saved * rate;
-    const net = recovered - lost;
-    return `<p class="verdict">${label}<b>Recruitment Charge saves ${stone(saved)} Pyroxene at the cost of ${Math.round(lost)} Eleph (of which festival shards ${Math.round(saved * FES_BYPRODUCT_PER_PULL)}).</b> Spend the freed ${saved.toFixed(1)} pulls on a festival-period Eleph chase (topped-up rate ${rate.toFixed(2)} Eleph per pull) and they return about ${Math.round(recovered)} Eleph — net ${net >= 0 ? '+' : '−'}${Math.abs(Math.round(net))} Eleph: <b>${net >= 0 ? 'Recruitment Charge' : 'Recruitment Points'} wins</b>.</p>`;
+    return `<p class="verdict">${label}Recruitment Charge saves <b class="gain">${stone(saved)} Pyroxene</b> at the cost of <b class="loss">${Math.round(lost)} Eleph</b>.<br>Eleph chase: <u class="tip" tabindex="0" data-tip="${saved.toFixed(1)} pulls * 80 shards / 5 Eleph + 200 Eleph / 90 expected pulls">${saved.toFixed(1)} pulls</u> → ${Math.round(recovered)} Eleph<br><b class="loss">Recruitment Points wins</b></p>`;
   };
+  // イロハを引き続ける打ち方は悪手(効率の悪い文字周回)なので、結論の比較相手にしない。
   if (target === 2) return line(result.blockRun[2].focus, '');
-  return line(result.blockRun[target].focus, '<b>vs staying on Iroha</b> | ')
-    + line(result.blockRun[target].sequential, '<b>vs moving on after each hit</b> | ');
+  return line(result.blockRun[target].sequential, '');
 }
 
 function outcomeRows(result, targets) {
@@ -128,9 +118,8 @@ function renderFestivalHtml(result) {
   const rates = result.rates;
   const banking = result.banking;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>5.5th Anniversary Festival Comparison</title><link rel="stylesheet" href="../css/festival.css"></head><body><main><nav class="nav"><a href="./">確率表</a><a href="festival.html" aria-current="page">5.5フェス限</a><a href="faq.html">Q&amp;A</a></nav><header class="hero"><div class="header-row"><h1>5.5th Anniversary Festival Comparison</h1>${GITHUB_LINK}</div><p class="lead">Festival spooks are frequent, adding variables normal banners lack. A desk-side check of the 5.5th-anniversary festival banner: old spec versus new.</p></header>
-<section class="panel"><details><summary>Assumptions</summary><ul class="rules"><li>The 3★ rate during festival recruitment is <b>${pct(rates.festivalStar3)}</b>.</li><li>The student you select appears at <b>${pct(rates.namedPu)}</b>. Under Recruitment Charge, that becomes 50% at charge 99 and 100% at charge 199.</li><li>The <b>9</b> remaining festival students — 10 in total, minus the one you selected — share <b>${pct(rates.spookPoolTotal)}</b> equally, giving <b>${pct(rates.spookEach)}</b> each.</li><li>The remaining <b>${pct(rates.otherStar3)}</b> covers permanent 3★ students. It is recorded for completeness but never used in the calculation.</li><li>The first-time pickup bonus is granted only by <b>pulling the student you selected or exchanging Recruitment Points</b>. An off-target pull never grants it.</li><li>The strategy always selects a student you do not own yet; once every student is owned, it selects an owned one to collect the remaining bonuses.</li><li>Eleph and shards are counted separately. Most players sit on a large shard stock, so shards cannot carry the same weight as Eleph.</li><li>Shard yield is treated as 80 per ten pulls during the festival (50 normally). Identical under both systems, so it does not affect the comparison.</li><li>The Eleph-chase top-up follows the ten-pull value rule, with the chase allowed during a festival period: +1.6 Eleph per pull (3.82 total). The festival side of the comparison is likewise credited 16 Eleph per ten pulls. Assumes a chase target remains — a bonus-unclaimed festival student such as a UE3-or-below Nel.</li></ul></details></section>
+<section class="panel"><details><summary>Assumptions</summary><ul class="rules"><li>The 3★ rate during festival recruitment is <b>${pct(rates.festivalStar3)}</b>.</li><li>The student you select appears at <b>${pct(rates.namedPu)}</b>. Under Recruitment Charge, that becomes 50% at charge 99 and 100% at charge 199.</li><li>The <b>9</b> remaining festival students — 10 in total, minus the one you selected — share <b>${pct(rates.spookPoolTotal)}</b> equally, giving <b>${pct(rates.spookEach)}</b> each.</li><li>The first-time pickup bonus is granted only by <b>pulling the student you selected or exchanging Recruitment Points</b>. An off-target pull never grants it.</li><li>Every ten-pull recruitment grants 50 shards (80 on festival banners).</li></ul></details></section>
 ${retreatSection(result)}
-${summarySection(result)}
 <footer>Generated by scripts/festival.js</footer></main>
 <script src="../js/festival.js" defer></script></body></html>`;
 }

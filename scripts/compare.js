@@ -21,7 +21,7 @@ function emptyCurves() {
   return Object.fromEntries(TARGETS.map((target) => [target, Array(MAX_PULLS + 1).fill(0)]));
 }
 
-/** 呼出チャージ: (獲得PU数, チャージ) に確率質量を集約する厳密DP。 */
+/** 呼び出しチャージ: (獲得PU数, チャージ) に確率質量を集約する厳密DP。 */
 function fivePointFiveCurves() {
   let states = new Map([['0:0', 1]]);
   let completedAll = 0;
@@ -65,7 +65,7 @@ function singleCycleDistribution() {
   return exact;
 }
 
-/** 呼出チャージの独立検算: 単一PU分布を必要PU数分だけ畳み込む。 */
+/** 呼び出しチャージの独立検算: 単一PU分布を必要PU数分だけ畳み込む。 */
 function convolutionCurves() {
   const single = singleCycleDistribution();
   const curves = emptyCurves();
@@ -85,7 +85,7 @@ function convolutionCurves() {
   return curves;
 }
 
-/** 呼出ポイント: 自引き済みPU数を1連ずつ更新し、200ptごとの交換を加える。 */
+/** 呼び出しポイント: 自引き済みPU数を1連ずつ更新し、200ptごとの交換を加える。 */
 function onePointZeroCurves() {
   const curves = emptyCurves();
   let natural = Array(MAX_TARGETS + 1).fill(0);
@@ -107,7 +107,7 @@ function onePointZeroCurves() {
   return { curves, maxMassError };
 }
 
-/** 二項分布による呼出ポイントの独立検算。 */
+/** 二項分布による呼び出しポイントの独立検算。 */
 function binomialTail(trials, minimum) {
   if (minimum <= 0) return 1;
   if (minimum > trials) return 0;

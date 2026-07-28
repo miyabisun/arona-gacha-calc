@@ -4,10 +4,10 @@
  * 5.5周年フェス限定募集の厳密確率計算。
  *
  * 通常の比較(compare.js)と違い、フェス限では星3排出率が6%へ倍化し、
- * 指名PU以外の新旧フェス限生徒も0.9%枠から出現する。この「すり抜け」で
+ * PU対象以外の新旧フェス限生徒も0.9%枠から出現する。この「すり抜け」で
  * 狙っている別の生徒を確保できるため、募集を1人へ集中させる戦略が成立する。
  *
- * 状態は (初回PUボーナス取得数, すり抜けのみで確保した数, 呼出チャージ)。
+ * 状態は (初回PUボーナス取得数, すり抜けのみで確保した数, 呼び出しチャージ)。
  * 生徒は同質として扱うので、誰を確保したかではなく人数だけを持てば足りる。
  */
 
@@ -62,7 +62,7 @@ const TARGETS = [2, 3, 4];
 const MILESTONES = [100, 200, 300, 400, 500, 600, 800];
 const OUTPUT_DIR = path.join(__dirname, '..', 'docs');
 
-/** 呼出チャージによる指名PUの確定枠。 */
+/** 呼び出しチャージによるPU対象の確定枠。 */
 function chargeHitRate(charge) {
   if (charge === 99) return 0.5;
   if (charge === 199) return 1;
@@ -82,7 +82,7 @@ function stateKey(bonus, spare, charge) {
 
 /**
  * 交換は未ボーナスの生徒へ1人分。素体を持っていない生徒を優先し、
- * 全員が素体済みなら素体持ちを指名してボーナスだけ回収する。
+ * 全員が素体済みなら素体持ちをPU対象にしてボーナスだけ回収する。
  */
 function applyExchange(states, target) {
   const next = new Map();
@@ -125,7 +125,7 @@ function emptyCurves() {
 
 /**
  * 1連ずつ全分岐させる厳密DP。
- * useCharge=false は呼出ポイント(チャージ無し)、useExchange=true は200連ごとの交換。
+ * useCharge=false は呼び出しポイント(チャージ無し)、useExchange=true は200連ごとの交換。
  */
 function runFestivalDp(target, { useCharge, useExchange, initialCharge = 0 }) {
   let states = new Map([[stateKey(0, 0, useCharge ? initialCharge : 0), 1]]);
@@ -142,10 +142,10 @@ function runFestivalDp(target, { useCharge, useExchange, initialCharge = 0 }) {
       const [bonus, spare, charge] = key.split(':').map(Number);
       const hit = useCharge ? chargeHitRate(charge) : NORMAL_PU_RATE;
       const residual = useCharge ? chargeResidual(charge) : 1;
-      // 素体を持たない生徒のうち、指名中の1人はすり抜けプールに含まれない。
+      // 素体を持たない生徒のうち、PU対象の1人はすり抜けプールに含まれない。
       const baseless = target - bonus - spare;
       const spook = residual * Math.max(0, baseless - 1) * SPOOK_EACH_RATE;
-      // 指名中の1人を除いた「すでに素体を持つ対象生徒」が重なると重複報酬になる。
+      // PU対象の1人を除いた「すでに素体を持つ対象生徒」が重なると重複報酬になる。
       const ownedInPool = Math.max(0, (bonus + spare) - (baseless > 0 ? 0 : 1));
       const spookDuplicate = residual * ownedInPool * SPOOK_EACH_RATE;
       const miss = 1 - hit - spook - spookDuplicate;
@@ -160,7 +160,7 @@ function runFestivalDp(target, { useCharge, useExchange, initialCharge = 0 }) {
       if (hit > 0) {
         const gained = mass * hit;
         if (baseless > 0) {
-          // 未所持を指名。素体と初回PUボーナスを得る。
+          // 未所持をPU対象に設定。素体と初回PUボーナスを得る。
           letters += gained * BONUS_LETTERS;
           add(stateKey(bonus + 1, spare, 0), gained);
         } else if (spare > 0) {
@@ -228,7 +228,7 @@ function effectiveLetters(hits) {
 }
 
 /**
- * 呼出チャージで「本命→相方の順に指名し、全員の素体がそろったら撤退する」運用。
+ * 呼び出しチャージで「本命→相方の順にPU対象へ設定し、全員の素体がそろったら撤退する」運用。
  * allowSpook=false は、すり抜けが一切起きなかった場合の比較用。
  */
 function runRetreat(targets, { allowSpook }, maxPulls = 800) {
@@ -249,7 +249,7 @@ function runRetreat(targets, { allowSpook }, maxPulls = 800) {
       const spook = allowSpook ? residual * Math.max(0, baseless - 1) * SPOOK_EACH_RATE : 0;
       const miss = 1 - hit - spook;
       if (hit > 0) {
-        // 指名した生徒なので、初回PUボーナスが必ず付く。
+        // PU対象の生徒なので、初回PUボーナスが必ず付く。
         letters += mass * hit * BONUS_LETTERS;
         add(`${bonus + 1}:${spare}:0`, mass * hit);
       }
@@ -272,7 +272,7 @@ function runRetreat(targets, { allowSpook }, maxPulls = 800) {
 }
 
 /**
- * 呼出ポイントで本命1名を指名し続ける運用。
+ * 呼び出しポイントで本命1名をPU対象にし続ける運用。
  * plan は200連ごとの交換先で、'sub'=相方を引き取る / 'veteran'=既所持のPU対象 / 'main'=本命。
  * 既所持でボーナス未消費の生徒を引き取ると、重複と初回ボーナスがまとめて入る。
  */
@@ -285,7 +285,7 @@ function runFocusExchange(limit, plan) {
     const add = (key, mass) => next.set(key, (next.get(key) ?? 0) + mass);
     for (const [key, mass] of states) {
       const [main, sub] = key.split(':').map(Number);
-      const spook = SPOOK_EACH_RATE;    // 相方は指名外なので常に流れてくる
+      const spook = SPOOK_EACH_RATE;    // 相方はPU対象外なので常に流れてくる
       const miss = 1 - NORMAL_PU_RATE - spook;
       letters += mass * NORMAL_PU_RATE * PU_DUPLICATE_LETTERS;
       add(`${Math.min(main + 1, FOCUS_HIT_CAP)}:${sub}`, mass * NORMAL_PU_RATE);
@@ -332,10 +332,10 @@ function runFocusExchange(limit, plan) {
 }
 
 /**
- * 呼出ポイントの実戦的な進め方。200連ブロック単位で引き、
+ * 呼び出しポイントの実戦的な進め方。200連ブロック単位で引き、
  * 素体がそろったブロックの終わりで撤退する（文字目当ての追加ブロックは回さない）。
  * 交換枠は未所持がいれば必ずそこへ使い、フェス限を取り逃さない。
- * focus=true は本命を指名し続け、false は未所持を順に指名する。
+ * focus=true は本命をPU対象にし続け、false は未所持を順にPU対象へ設定する。
  */
 function runBlockRun(targets, { focus }, maxBlocks = 4) {
   const others = targets - 1;
@@ -356,7 +356,7 @@ function runBlockRun(targets, { focus }, maxBlocks = 4) {
         next.set(key, cell);
       };
       for (const [key, cell] of states) {
-        // main=本命の入手数 / pu=指名か交換で得たその他 / spook=すり抜けだけで得たその他
+        // main=本命の入手数 / pu=PU対象か交換で得たその他 / spook=すり抜けだけで得たその他
         const [main, pu, spook] = key.split(':').map(Number);
         const { mass, letters } = cell;
         pulls += mass;
@@ -398,7 +398,7 @@ function runBlockRun(targets, { focus }, maxBlocks = 4) {
       const [main, pu, spook] = key.split(':').map(Number);
       const { mass, letters } = cell;
       const missing = others - pu - spook;
-      // 交換はイロハ以外の未所持を優先する。イロハは指名で掘っている最中なので、
+      // 交換はイロハ以外の未所持を優先する。イロハはPU対象として掘っている最中なので、
       // 交換で取るのは彼女が最後まで出なかったときの保険に回す。
       if (missing > 0) add2(`${main}:${pu + 1}:${spook}`, mass, letters + mass * BONUS_LETTERS);
       else if (main === 0) add2(`1:${pu}:${spook}`, mass, letters + mass * BONUS_LETTERS);
@@ -477,13 +477,13 @@ function calculateFestival() {
     scenarios[scenario.id] = byTarget;
   }
 
-  // 呼出チャージで素体だけそろえて撤退する運用。すり抜けの得失を測る。
+  // 呼び出しチャージで素体だけそろえて撤退する運用。すり抜けの得失を測る。
   const retreat = Object.fromEntries(TARGETS.map((target) => [target, {
     withSpook: runRetreat(target, { allowSpook: true }),
     withoutSpook: runRetreat(target, { allowSpook: false }),
   }]));
 
-  // 呼出ポイントで本命に集中したとき、交換枠の流し先で結果がどう変わるか。
+  // 呼び出しポイントで本命に集中したとき、交換枠の流し先で結果がどう変わるか。
   const exchangePlans = [
     { id: 'subThenMain', plan: ['sub', 'main'] },
     { id: 'subThenVeteran', plan: ['sub', 'veteran'] },
@@ -530,11 +530,11 @@ function calculateFestival() {
   })();
 
   // チャージ99を次の募集へ持ち越す仕込みの台帳。
-  // 指名生徒を引くとカウンタは0に戻るが、その後の外れ分はまた積み上がる。
+  // PU対象の生徒を引くとカウンタは0に戻るが、その後の外れ分はまた積み上がる。
   // よって99連を回しても「カウンタ0で終わる」わけではない。
   const banking = (() => {
     const q = 1 - NORMAL_PU_RATE;
-    // カウンタcから指名生徒を1体確保するまでの期待連数(100連目50%、200連目確定)。
+    // カウンタcからPU対象の生徒を1体確保するまでの期待連数(100連目50%、200連目確定)。
     const expected = (charge) => (1 - q ** (100 - charge)) / NORMAL_PU_RATE
       + 0.5 * q ** (99 - charge) * (1 - q ** 100) / NORMAL_PU_RATE;
     const fromZero = expected(0);
@@ -552,7 +552,7 @@ function calculateFestival() {
     expectedSaving += survival * (fromZero - fromBank);
     expectedCharge += survival * BANK_PULLS;
 
-    // 指名生徒が出た時点で止める運用。天井前なので純コストは (1-q^99)*E(0) に一致する。
+    // PU対象の生徒が出た時点で止める運用。天井前なので純コストは (1-q^99)*E(0) に一致する。
     const stopOnHitCost = (1 - survival) * fromZero;
     const hits = NORMAL_PU_RATE * BANK_PULLS;  // 99連での期待獲得数
     const letters = (PU_DUPLICATE_LETTERS + BONUS_LETTERS) * (1 - survival)
@@ -588,7 +588,7 @@ function calculateFestival() {
   // 暴発した側だけの条件付き平均短縮。全体から非暴発枝を引いて求める。
   banking.savingWhenHit = (banking.expectedSaving - banking.survivalToBank * banking.savedPulls)
     / banking.hitChance;
-  // 支出を文字へ直すレート。指名を追う効率そのもの。
+  // 支出を文字へ直すレート。PU対象を追う効率そのもの。
   banking.lettersPerPull = (PU_DUPLICATE_LETTERS + BONUS_LETTERS) / banking.expectedPullsPlain;
   // 補填込みの掘り効率。星3の欠片ぶんを上乗せする(ボーナス未取得のフェス限が残る先生は更に得だが、
   // できない先生もいるため新仕様不利側=この保守値を採用)。
@@ -624,12 +624,12 @@ function calculateFestival() {
       otherStar3: FES_STAR3_RATE - NORMAL_PU_RATE - SPOOK_TOTAL_RATE,
     },
     assumptions: {
-      namedPu: '指名した1名の排出率は0.7%。呼出チャージではチャージ99で50%、199で100%。',
-      spook: '新旧フェス限10名から指名中の1名を除いた9名が0.9%を等分し、1名あたり0.1%。',
+      namedPu: 'PU対象1名の排出率は0.7%。呼び出しチャージではチャージ99で50%、199で100%。',
+      spook: '新旧フェス限10名からPU対象の1名を除いた9名が0.9%を等分し、1名あたり0.1%。',
       spookOnCharge: 'チャージ99の確定50%を外した残り50%でのみ通常抽選が回り、199は確定のためすり抜けなし。',
-      bonus: '初回PUボーナスは指名PUの自引きと呼出ポイント交換でのみ得られる。すり抜け獲得では得られない。',
-      policy: '素体を持たない生徒を優先して指名し、全員が素体済みなら素体持ちを指名してボーナスだけ回収する。',
-      exchange: '呼出ポイントは200連ごとに未ボーナスの生徒を1名交換する。',
+      bonus: '初回PUボーナスはPU対象の自引きと呼び出しポイント交換でのみ得られる。すり抜け獲得では得られない。',
+      policy: '素体を持たない生徒を優先してPU対象に設定し、全員が素体済みなら素体持ちをPU対象にしてボーナスだけ回収する。',
+      exchange: '呼び出しポイントは200連ごとに未ボーナスの生徒を1名交換する。',
       otherStar3Unused: '恒常星3の4.4%は内訳として記録するだけで計算には使わない。',
     },
     scenarios,
